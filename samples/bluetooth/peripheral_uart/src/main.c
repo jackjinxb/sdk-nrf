@@ -181,7 +181,7 @@ static void disconnected(struct bt_conn *conn, u8_t reason)
 	bt_addr_le_to_str(bt_conn_get_dst(conn), addr, sizeof(addr));
 
 	printk("Disconnected: %s (reason %u)\n", addr, reason);
-
+	printk("test ");
 	if (auth_conn) {
 		bt_conn_unref(auth_conn);
 		auth_conn = NULL;
