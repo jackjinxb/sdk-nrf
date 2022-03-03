@@ -1,0 +1,72 @@
+#
+# Copyright (c) 2021 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+cmake_minimum_required(VERSION 3.20.0)
+
+if(BOARD STREQUAL "nrf52840dk_nrf52840" OR BOARD STREQUAL "nrf5340dk_nrf5340_cpuapp")
+    set(BUILD_WITH_DFU "MATTER" CACHE STRING "Build target with Device Firmware Upgrade support")
+else()
+    set(BUILD_WITH_DFU "OFF" CACHE STRING "Build target with Device Firmware Upgrade support")
+endif()
+
+if(NOT BUILD_WITH_DFU STREQUAL "OFF")
+    if(BUILD_WITH_DFU STREQUAL "BLE" AND BOARD STREQUAL "nrf5340dk_nrf5340_cpuapp")
+        set(CONF_FILE prj_multi_image_smp_dfu.conf)
+    elseif(BUILD_WITH_DFU STREQUAL "BLE")
+        set(CONF_FILE prj_single_image_smp_dfu.conf)
+    elseif(BUILD_WITH_DFU STREQUAL "MATTER" AND BOARD STREQUAL "nrf5340dk_nrf5340_cpuapp")
+        set(CONF_FILE prj_multi_image_matter_dfu.conf)
+    elseif(BUILD_WITH_DFU STREQUAL "MATTER")
+        set(CONF_FILE prj_single_image_matter_dfu.conf)
+    else()
+        message(FATAL_ERROR "Selected invalid BUILD_WITH_DFU value: ${BUILD_WITH_DFU}")
+    endif()
+
+    if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/configuration/${BOARD}/pm_static.yml")
+        set(PM_STATIC_YML_FILE ${CMAKE_CURRENT_SOURCE_DIR}/configuration/${BOARD}/pm_static.yml)
+    else()
+        message(FATAL_ERROR "The ${BOARD} target does not support DFU")
+    endif()
+endif()
+
+find_package(Zephyr HINTS $ENV{ZEPHYR_BASE})
+
+project(matter-light-bulb)
+
+set(COMMON_ROOT ${ZEPHYR_NRF_MODULE_DIR}/samples/matter/common)
+set(NLIO_ROOT ${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/third_party/nlio/repo)
+include(${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/config/nrfconnect/app/enable-gnu-std.cmake)
+include(${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/src/app/chip_data_model.cmake)
+
+# NORDIC SDK APP START
+target_include_directories(app PRIVATE
+    src
+    ${COMMON_ROOT}/src
+    ${NLIO_ROOT}/include
+    ${ZEPHYR_CONNECTEDHOMEIP_MODULE_DIR}/zzz_generated/app-common
+)
+
+target_sources(app PRIVATE
+    src/app_task.cpp
+    src/lighting_manager.cpp
+    src/light_bulb_publish_service.cpp
+    src/main.cpp
+    src/zcl_callbacks.cpp
+    src/zap-generated/IMClusterCommandHandler.cpp
+    src/zap-generated/callback-stub.cpp
+    ${COMMON_ROOT}/src/led_widget.cpp
+    ${COMMON_ROOT}/src/thread_util.cpp
+)
+
+if(BUILD_WITH_DFU STREQUAL "BLE")
+    target_sources(app PRIVATE ${COMMON_ROOT}/src/dfu_over_smp.cpp)
+endif()
+
+chip_configure_data_model(app
+    INCLUDE_SERVER
+    ZAP_FILE ${CMAKE_CURRENT_SOURCE_DIR}/src/light_bulb.zap
+)
+# NORDIC SDK APP END

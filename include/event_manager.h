@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -21,140 +21,16 @@
 
 #include <zephyr.h>
 #include <zephyr/types.h>
-#include <power/reboot.h>
 #include <sys/__assert.h>
-#include <logging/log_ctrl.h>
+#include <logging/log.h>
 
 #include <event_manager_priv.h>
-#include <profiler.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-
-/** @def SUBS_PRIO_MIN
- *
- * @brief Index of the highest subscriber priority level.
- */
-#define SUBS_PRIO_MIN    _SUBS_PRIO_FIRST
-
-
-/** @def SUBS_PRIO_MAX
- *
- * @brief Index of the lowest subscriber priority level.
- */
-#define SUBS_PRIO_MAX    _SUBS_PRIO_FINAL
-
-
-/** @def SUBS_PRIO_COUNT
- *
- * @brief Number of subscriber priority levels.
- */
-#define SUBS_PRIO_COUNT (SUBS_PRIO_MAX - SUBS_PRIO_MIN + 1)
-
-
-/** @brief Event header.
- *
- * When defining an event structure, the event header
- * must be placed as the first field.
- */
-struct event_header {
-	/** Linked list node used to chain events. */
-	sys_snode_t node;
-
-	/** Pointer to the event type object. */
-	const struct event_type *type_id;
-};
-
-
-/** @brief Dynamic event data.
- *
- * When defining an event structure, the dynamic event data
- * must be placed as the last field.
- */
-struct event_dyndata {
-	/** Size of the dynamic data. */
-	size_t size;
-
-	/** Dynamic data. */
-	u8_t data[0];
-};
-
-
-/** @brief Event listener.
- *
- * All event listeners must be defined using @ref EVENT_LISTENER.
- */
-struct event_listener {
-	/** Name of this listener. */
-	const char *name;
-
-	/** Pointer to the function that is called when an event
-	 *  is handled. */
-	bool (*notification)(const struct event_header *eh);
-};
-
-
-/** @brief Event subscriber.
- */
-struct event_subscriber {
-	/** Pointer to the listener. */
-	const struct event_listener *listener;
-};
-
-
-/** @brief Event description for profiling or logging.
- */
-struct event_info {
-	/** Function for profiling this event. */
-	void (*profile_fn)(struct log_event_buf *buf,
-			   const struct event_header *eh);
-
-	/** Number of logged data fields. */
-	const u8_t log_arg_cnt;
-
-	/** Labels of logged data fields. */
-	const char **log_arg_labels;
-
-	/** Types of logged data fields. */
-	const enum profiler_arg *log_arg_types;
-};
-
-
-/** @brief Event type.
- */
-struct event_type {
-	/** Event name. */
-	const char			*name;
-
-	/** Array of pointers to the array of subscribers. */
-	const struct event_subscriber	*subs_start[SUBS_PRIO_COUNT];
-
-	/** Array of pointers to the element directly after the array of
-	 * subscribers. */
-	const struct event_subscriber	*subs_stop[SUBS_PRIO_COUNT];
-
-	/** Bool indicating if the event is logged by default. */
-	bool init_log_enable;
-
-	/** Function to log data from this event. */
-	int (*log_event)(const struct event_header *eh, char *buf,
-			      size_t buf_len);
-
-	/** Logging and formatting information. */
-	const struct event_info *ev_info;
-};
-
-
-extern const struct event_listener __start_event_listeners[];
-extern const struct event_listener __stop_event_listeners[];
-
-extern const struct event_type __start_event_types[];
-extern const struct event_type __stop_event_types[];
-
-
-/** Create an event listener object.
+/** @brief Create an event listener object.
  *
  * @param lname   Module name.
  * @param cb_fn  Pointer to the event handler function.
@@ -162,61 +38,49 @@ extern const struct event_type __stop_event_types[];
 #define EVENT_LISTENER(lname, cb_fn) _EVENT_LISTENER(lname, cb_fn)
 
 
-/** Subscribe a listener to the early notification list for an
+/** @brief Subscribe a listener to an event type as first module that is
+ *  being notified.
+ *
+ * @param lname  Name of the listener.
+ * @param ename  Name of the event.
+ */
+#define EVENT_SUBSCRIBE_FIRST(lname, ename)							\
+	_EVENT_SUBSCRIBE(lname, ename, _EM_MARKER_FIRST_ELEMENT);				\
+	const struct {} _CONCAT(_CONCAT(__event_subscriber_, ename), first_sub_redefined) = {}
+
+
+/** @brief Subscribe a listener to the early notification list for an
  *  event type.
  *
  * @param lname  Name of the listener.
  * @param ename  Name of the event.
  */
 #define EVENT_SUBSCRIBE_EARLY(lname, ename) \
-	_EVENT_SUBSCRIBE(lname, ename, _SUBS_PRIO_ID(_SUBS_PRIO_FIRST))
+	_EVENT_SUBSCRIBE(lname, ename, _EM_SUBS_PRIO_ID(_EM_SUBS_PRIO_EARLY))
 
 
-/** Subscribe a listener to the normal notification list for an event
+/** @brief Subscribe a listener to the normal notification list for an event
  *  type.
  *
  * @param lname  Name of the listener.
  * @param ename  Name of the event.
  */
 #define EVENT_SUBSCRIBE(lname, ename) \
-	_EVENT_SUBSCRIBE(lname, ename, _SUBS_PRIO_ID(_SUBS_PRIO_NORMAL))
+	_EVENT_SUBSCRIBE(lname, ename, _EM_SUBS_PRIO_ID(_EM_SUBS_PRIO_NORMAL))
 
 
-/** Subscribe a listener to an event type as final module that is
+/** @brief Subscribe a listener to an event type as final module that is
  *  being notified.
  *
  * @param lname  Name of the listener.
  * @param ename  Name of the event.
  */
 #define EVENT_SUBSCRIBE_FINAL(lname, ename)							\
-	_EVENT_SUBSCRIBE(lname, ename, _SUBS_PRIO_ID(_SUBS_PRIO_FINAL));			\
+	_EVENT_SUBSCRIBE(lname, ename, _EM_MARKER_FINAL_ELEMENT);				\
 	const struct {} _CONCAT(_CONCAT(__event_subscriber_, ename), final_sub_redefined) = {}
 
 
-/** Encode event data types or labels.
- *
- * @param ... Data types or labels to be encoded.
- */
-#define ENCODE(...) __VA_ARGS__
-
-
-/** Define event profiling information.
- *
- * This macro provides definitions required for an event to be profiled.
- *
- * @note Types and labels of the profiled values should be wrapped
- *       with the @ref ENCODE macro.
- *
- * @param ename Name of the event.
- * @param types Types of values to profile (represented as @ref profiler_arg).
- * @param labels Labels of values to profile.
- * @param log_arg_func Function used to profile event data.
- */
-#define EVENT_INFO_DEFINE(ename, types, labels, profile_func) \
-	_EVENT_INFO_DEFINE(ename, ENCODE(types), ENCODE(labels), profile_func)
-
-
-/** Declare an event type.
+/** @brief Declare an event type.
  *
  * This macro provides declarations required for an event to be used
  * by other modules.
@@ -226,7 +90,7 @@ extern const struct event_type __stop_event_types[];
 #define EVENT_TYPE_DECLARE(ename) _EVENT_TYPE_DECLARE(ename)
 
 
-/** Declare an event type with dynamic data size.
+/** @brief Declare an event type with dynamic data size.
  *
  * This macro provides declarations required for an event to be used
  * by other modules.
@@ -237,7 +101,7 @@ extern const struct event_type __stop_event_types[];
 #define EVENT_TYPE_DYNDATA_DECLARE(ename) _EVENT_TYPE_DYNDATA_DECLARE(ename)
 
 
-/** Define an event type.
+/** @brief Define an event type.
  *
  * This macro defines an event type. In addition, it defines functions
  * specific to the event type and the event type structure.
@@ -261,7 +125,7 @@ extern const struct event_type __stop_event_types[];
 	_EVENT_TYPE_DEFINE(ename, init_log_en, log_fn, ev_info_struct)
 
 
-/** Verify if an event ID is valid.
+/** @brief Verify if an event ID is valid.
  *
  * The pointer to an event type structure is used as its ID. This macro
  * validates that the provided pointer is within the range where event
@@ -270,17 +134,12 @@ extern const struct event_type __stop_event_types[];
  * @param id  ID.
  */
 #define ASSERT_EVENT_ID(id) \
-	__ASSERT_NO_MSG((id >= __start_event_types) && (id < __stop_event_types))
+	__ASSERT_NO_MSG((id >= _event_type_list_start) && (id < _event_type_list_end))
 
 
-/** Submit an event to the Event Manager.
- *
- * @param eh  Pointer to the event header element in the event object.
- */
-void _event_submit(struct event_header *eh);
 
 
-/** Submit an event.
+/** @brief Submit an event.
  *
  * This helper macro simplifies the event submission.
  *
@@ -289,11 +148,93 @@ void _event_submit(struct event_header *eh);
 #define EVENT_SUBMIT(event) _event_submit(&event->header)
 
 
-/** Initialize the Event Manager.
+/** @brief Initialize the Event Manager.
  *
- * @retval 0 If the operation was successful.
+ * @retval 0 If the operation was successful. Error values can be added by overwriting
+ *         event_manager_trace_event_init function.
  */
 int event_manager_init(void);
+
+
+/** @brief Trace event execution.
+ * The behavior of this function depends on the actual implementation.
+ * The default implementation of this function is no-operation.
+ * It is annotated as weak and is meant to be overridden by layer
+ * adding support for profiling mechanism.
+ *
+ * @param eh        Pointer to the event header of the event that is processed by Event Manager.
+ * @param is_start  Bool value indicating if this occurrence is related
+ *                  to start or end of the event processing.
+ **/
+void event_manager_trace_event_execution(const struct event_header *eh,
+				  bool is_start);
+
+
+/** @brief Trace event submission.
+ * The behavior of this function depends on the actual implementation.
+ * The default implementation of this function is no-operation.
+ * It is annotated as weak and is meant to be overridden by layer
+ * adding support for profiling mechanism.
+ *
+ * @param eh          Pointer to the event header of the event that is processed by Event Manager.
+ * @param trace_info  Custom event description for profiling.
+ **/
+void event_manager_trace_event_submission(const struct event_header *eh,
+				const void *trace_info);
+
+
+/** @brief Initialize tracing in the Event Manager.
+ * The behavior of this function depends on the actual implementation.
+ * The default implementation of this function is no-operation.
+ * It is annotated as weak and is meant to be overridden by layer
+ * adding support for profiling mechanism.
+ *
+ * @retval 0 If the operation was successful. Error values can be added by
+ *         overwriting this function.
+ **/
+int event_manager_trace_event_init(void);
+
+/** @brief Allocate event.
+ * The behavior of this function depends on the actual implementation.
+ * The default implementation of this function is same as k_malloc.
+ * It is annotated as weak and can be overridden by user.
+ *
+ * @param size  Amount of memory requested (in bytes).
+ * @retval Address of the allocated memory if successful, otherwise NULL.
+ **/
+void *event_manager_alloc(size_t size);
+
+
+/** @brief Free memory occupied by the event.
+ * The behavior of this function depends on the actual implementation.
+ * The default implementation of this function is same as k_free.
+ * It is annotated as weak and can be overridden by user.
+ *
+ * @param addr  Pointer to previously allocated memory.
+ **/
+void event_manager_free(void *addr);
+
+
+/** @brief Log event
+ *
+ * This helper macro simplifies event logging.
+ *
+ * @param eh  Pointer to the event header of the event that is processed by Event Manager.
+ * @param ... `printf`- like format string and variadic list of arguments corresponding to
+ *            the format string.
+ */
+#define EVENT_MANAGER_LOG(eh, ...) do {								\
+	LOG_MODULE_DECLARE(event_manager, CONFIG_EVENT_MANAGER_LOG_LEVEL);			\
+	if (IS_ENABLED(CONFIG_EVENT_MANAGER_LOG_EVENT_TYPE)) {					\
+		LOG_INF("e:%s " GET_ARG_N(1, __VA_ARGS__), eh->type_id->name			\
+			COND_CODE_0(NUM_VA_ARGS_LESS_1(__VA_ARGS__),				\
+			    (),									\
+			    (, GET_ARGS_LESS_N(1, __VA_ARGS__))					\
+			));									\
+	} else {										\
+		LOG_INF(__VA_ARGS__);								\
+	}											\
+} while (0)
 
 
 #ifdef __cplusplus

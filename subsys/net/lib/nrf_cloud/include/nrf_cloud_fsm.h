@@ -1,13 +1,15 @@
 /*
  * Copyright (c) 2017 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef NRF_CLOUD_FSM_H__
 #define NRF_CLOUD_FSM_H__
 
-#include <nrf_cloud.h>
+#include <stdbool.h>
+#include <net/nrf_cloud.h>
+#include <net/nrf_cloud_cell_pos.h>
 #include "nrf_cloud_transport.h"
 
 #ifdef __cplusplus
@@ -26,9 +28,6 @@ enum nfsm_state {
 	STATE_UA_PIN_COMPLETE,
 	STATE_DC_CONNECTING,
 	STATE_DC_CONNECTED,
-	STATE_READY,
-	STATE_DISCONNECTING,
-	STATE_ERROR,
 	STATE_TOTAL,
 };
 
@@ -57,6 +56,20 @@ void nfsm_set_current_state_and_notify(enum nfsm_state state,
  * To be implemented by the user application.
  */
 void nfsm_disconnect(void);
+
+/**@brief Get flag which indicates if user/app requested a disconnect.
+ *
+ * @retval true  User/application requested a disconnect.
+ *         false Unexpected disconnect.
+ */
+bool nfsm_get_disconnect_requested(void);
+
+#if defined(CONFIG_NRF_CLOUD_CELL_POS) && defined(CONFIG_NRF_CLOUD_MQTT)
+/**@brief Sets a callback from the nrf_cloud_cell_pos module to
+ * handle the cellular positioning response data from the cloud.
+ */
+void nfsm_set_cell_pos_response_cb(nrf_cloud_cell_pos_response_t cb);
+#endif
 
 #ifdef __cplusplus
 }

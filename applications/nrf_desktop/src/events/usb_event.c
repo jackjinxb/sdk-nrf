@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <assert.h>
@@ -23,16 +23,31 @@ static int log_usb_state_event(const struct event_header *eh, char *buf,
 {
 	const struct usb_state_event *event = cast_usb_state_event(eh);
 
-	BUILD_ASSERT_MSG(ARRAY_SIZE(state_name) == USB_STATE_COUNT,
+	BUILD_ASSERT(ARRAY_SIZE(state_name) == USB_STATE_COUNT,
 			 "Invalid number of elements");
 
 	__ASSERT_NO_MSG(event->state < USB_STATE_COUNT);
 
-	return snprintf(buf, buf_len, "id:%p state:%s", event->id,
-			state_name[event->state]);
+	EVENT_MANAGER_LOG(eh, "state:%s", state_name[event->state]);
+	return 0;
 }
 
 EVENT_TYPE_DEFINE(usb_state_event,
 		  IS_ENABLED(CONFIG_DESKTOP_INIT_LOG_USB_STATE_EVENT),
 		  log_usb_state_event,
+		  NULL);
+
+static int log_usb_hid_event(const struct event_header *eh, char *buf,
+			     size_t buf_len)
+{
+	const struct usb_hid_event *event = cast_usb_hid_event(eh);
+
+	EVENT_MANAGER_LOG(eh, "id:%p %sabled", event->id,
+			(event->enabled)?("en"):("dis"));
+	return 0;
+}
+
+EVENT_TYPE_DEFINE(usb_hid_event,
+		  IS_ENABLED(CONFIG_DESKTOP_INIT_LOG_USB_HID_EVENT),
+		  log_usb_hid_event,
 		  NULL);

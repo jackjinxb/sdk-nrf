@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
  * @file
- * @defgroup bt_mesh_lvl_srv Bluetooth Mesh Generic Level Server model
+ * @defgroup bt_mesh_lvl_srv Bluetooth mesh Generic Level Server model
  * @ingroup bt_mesh_lvl
  * @{
  * @brief API for the Generic Level Server model.
@@ -16,6 +16,7 @@
 #define BT_MESH_GEN_LVL_SRV_H__
 
 #include <bluetooth/mesh/gen_lvl.h>
+#include <bluetooth/mesh/scene_srv.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -32,11 +33,6 @@ struct bt_mesh_lvl_srv;
 #define BT_MESH_LVL_SRV_INIT(_handlers)                                        \
 	{                                                                      \
 		.handlers = _handlers,                                         \
-		.pub = {.update = _bt_mesh_lvl_srv_update_handler,             \
-			.msg = NET_BUF_SIMPLE(BT_MESH_MODEL_BUF_LEN(           \
-				BT_MESH_LVL_OP_STATUS,                         \
-				BT_MESH_LVL_MSG_MAXLEN_STATUS)),               \
-		}                                                              \
 	}
 
 /** @def BT_MESH_MODEL_LVL_SRV
@@ -52,9 +48,9 @@ struct bt_mesh_lvl_srv;
 						 _srv),                        \
 			 &_bt_mesh_lvl_srv_cb)
 
-/** Handler functions for the generic level server. */
+/** Handler functions for the Generic Level Server. */
 struct bt_mesh_lvl_srv_handlers {
-	/** @brief Get the current level state.
+	/** @brief Get the current Level state.
 	 *
 	 * @note This handler is mandatory.
 	 *
@@ -67,7 +63,13 @@ struct bt_mesh_lvl_srv_handlers {
 			  struct bt_mesh_msg_ctx *ctx,
 			  struct bt_mesh_lvl_status *rsp);
 
-	/** @brief Set the level state.
+	/** @brief Set the Level state.
+	 *
+	 * When a set message is received, the model publishes a status message, with the response
+	 * set to @c rsp. When an acknowledged set message is received, the model also sends a
+	 * response back to a client. If a state change is non-instantaneous, for example when
+	 * @ref bt_mesh_model_transition_time returns a nonzero value, the application is
+	 * responsible for publishing a value of the Level state at the end of the transition.
 	 *
 	 * @note This handler is mandatory.
 	 *
@@ -84,7 +86,7 @@ struct bt_mesh_lvl_srv_handlers {
 			  struct bt_mesh_lvl_status *rsp);
 
 	/**
-	 * @brief Change the level state relative to its current value.
+	 * @brief Change the Level state relative to its current value.
 	 *
 	 * If @c delta_set::new_transaction is false, the state transition
 	 * should use the same start point as the previous delta_set message,
@@ -106,9 +108,9 @@ struct bt_mesh_lvl_srv_handlers {
 				const struct bt_mesh_lvl_delta_set *delta_set,
 				struct bt_mesh_lvl_status *rsp);
 
-	/** @brief Move the level state continuously at a given rate.
+	/** @brief Move the Level state continuously at a given rate.
 	 *
-	 * The level state should move @c move_set::delta units for every
+	 * The Level state should move @c move_set::delta units for every
 	 * @c move_set::transition::time milliseconds. For instance, if
 	 * delta is 5 and the transition time is 100ms, the state should move
 	 * at a rate of 50 per second.
@@ -145,20 +147,23 @@ struct bt_mesh_lvl_srv {
 	struct bt_mesh_model *model;
 	/** Model publication parameters. */
 	struct bt_mesh_model_pub pub;
+	/* Publication buffer */
+	struct net_buf_simple pub_buf;
+	/* Publication data */
+	uint8_t pub_data[BT_MESH_MODEL_BUF_LEN(BT_MESH_LVL_OP_STATUS,
+					       BT_MESH_LVL_MSG_MAXLEN_STATUS)];
 	/** Transaction ID tracking. */
 	struct bt_mesh_tid_ctx tid;
 };
 
-/** @brief Publish the generic level state.
+/** @brief Publish the current Level state.
  *
- * @param[in] srv Server whose level state should be published.
+ * @param[in] srv Server whose Level state should be published.
  * @param[in] ctx Message context to publish with, or NULL to publish on the
  * configured publish parameters.
  * @param[in] status Current status.
  *
  * @retval 0 Successfully published a Generic Level Status message.
- * @retval -ENOTSUP A message context was not provided and publishing is not
- * supported.
  * @retval -EADDRNOTAVAIL A message context was not provided and publishing is
  * not configured.
  * @retval -EAGAIN The device has not been provisioned.
@@ -170,7 +175,6 @@ int bt_mesh_lvl_srv_pub(struct bt_mesh_lvl_srv *srv,
 /** @cond INTERNAL_HIDDEN */
 extern const struct bt_mesh_model_op _bt_mesh_lvl_srv_op[];
 extern const struct bt_mesh_model_cb _bt_mesh_lvl_srv_cb;
-int _bt_mesh_lvl_srv_update_handler(struct bt_mesh_model *model);
 /** @endcond */
 
 #ifdef __cplusplus

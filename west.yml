@@ -1,145 +1,183 @@
-# The west manifest file for the nRF Connect SDK (NCS).
+# The west manifest file (west.yml) for the nRF Connect SDK (NCS).
 #
-# The per-installation west configuration file specifies the location of this
-# manifest file. The "path" option in the [manifest] section of .west/config
-# defines the folder that contains west.yml. The path is relative to the folder
-# that contains .west.
+# The per-workspace west configuration file, ncs/.west/config,
+# specifies the location of this manifest file like this:
 #
-# You can create your own manifest files and put them in any
-# repository you want, to create your own custom NCS installation.
-# For example, you could create a manifest file in your own
-# out-of-tree application directory, which would pull the nrf repository
-# in as an ordinary project.
+#     [manifest]
+#     path = nrf
 #
-# You can pass your manifest repositories to west init when creating a
-# new NCS installation. See the west documentation for more
-# information.
+# See the west documentation for more information:
+#
+# https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/guides/west/index.html
 
 manifest:
-  defaults:
-    remote: ncs
+  version: "0.12"
 
+  # "remotes" is a list of locations where git repositories are cloned
+  # and fetched from.
   remotes:
-      # nRF Connect SDK base URL.
+    # nRF Connect SDK GitHub organization.
+    # NCS repositories are hosted here.
     - name: ncs
-      url-base: https://github.com/NordicPlayground
+      url-base: https://github.com/nrfconnect
+    # Third-party repository sources:
     - name: zephyrproject
       url-base: https://github.com/zephyrproject-rtos
     - name: throwtheswitch
       url-base: https://github.com/ThrowTheSwitch
     - name: armmbed
       url-base: https://github.com/ARMmbed
-    - name: civetweb
-      url-base: https://github.com/civetweb
+    - name: alexa
+      url-base: https://github.com/alexa
+    - name: nordicsemi
+      url-base: https://github.com/NordicSemiconductor
+    - name: memfault
+      url-base: https://github.com/memfault
 
-  # The list of external projects for the nRF Connect SDK.
-  #
+  # If not otherwise specified, the projects below should be obtained
+  # from the ncs remote.
+  defaults:
+    remote: ncs
+
+  group-filter: [-homekit, -nrf-802154, -find-my]
+
+  # "projects" is a list of git repositories which make up the NCS
+  # source code.
   projects:
+
+    # The Zephyr RTOS fork in the NCS, along with the subset of its
+    # modules which NCS imports directly.
+    #
+    # https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/introduction/index.html
+    # https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/zephyr/guides/modules.html
     - name: zephyr
-      repo-path: fw-nrfconnect-zephyr
-      west-commands: scripts/west-commands.yml
-      revision: 7ddab664b04b3f5a635285ecedd469ec738aa608
-    - name: segger
-      revision: 6fcf61606d6012d2c44129edc033f59331e268bc
-      path: modules/debug/segger
-      remote: zephyrproject
-    - name: mbedtls
-      path: modules/crypto/mbedtls
-      revision: 3776c158fe138a72c97c187e4d31c81c37884be9
-      remote: zephyrproject
+      repo-path: sdk-zephyr
+      revision: c3208e7ff49d22d8271f305344382e9306fdde99
+      import:
+        # In addition to the zephyr repository itself, NCS also
+        # imports the contents of zephyr/west.yml at the above
+        # revision. Only the projects explicitly named in the
+        # following allowlist are imported.
+        #
+        # Note that the zephyr west extensions (like 'build', 'flash',
+        # 'debug', etc.) are automatically provided by this import, so
+        # there's no need to add a redundant west-commands: key for
+        # the zephyr project.
+        #
+        # Please keep this list sorted alphabetically.
+        name-allowlist:
+          - TraceRecorderSource
+          - canopennode
+          - civetweb
+          - cmsis
+          - edtt
+          - fatfs
+          - fff
+          - hal_nordic
+          - hal_st
+          - libmetal
+          - littlefs
+          - loramac-node
+          - lvgl
+          - lz4
+          - mbedtls
+          - mipi-sys-t
+          - nanopb
+          - net-tools
+          - nrf_hw_models
+          - open-amp
+          - psa-arch-tests
+          - segger
+          - tinycbor
+          - tinycrypt
+          - tf-m-tests
+          - zscilib
+
+    # NCS repositories.
+    #
+    # Some of these are also Zephyr modules which have NCS-specific
+    # changes.
     - name: mcuboot
-      repo-path: fw-nrfconnect-mcuboot
-      revision:  e09ecbe78dc9f24be0dd652e591a9eedf1fbf914
+      repo-path: sdk-mcuboot
+      revision: v1.8.99-ncs1
       path: bootloader/mcuboot
-    - name: mcumgr
-      repo-path: fw-nrfconnect-mcumgr
-      revision: v0.0.1-ncs1
-      path: modules/lib/mcumgr
-    - name: tinycbor
-      path: modules/lib/tinycbor
-      revision: 0fc68fceacd1efc1ce809c5880c380f3d98b7b6e
-      remote: zephyrproject
-    - name: ci-tools
-      path: tools/ci-tools
-      remote: zephyrproject
-      revision: e869d2524d1344d80063bf2898095faf9228f7b5
-    - name: net-tools
-      path: tools/net-tools
-      remote: zephyrproject
-      revision: 30b7efa827b04d2e47840716b0372737fe7d6c92
+    - name: mbedtls-nrf
+      path: mbedtls
+      repo-path: sdk-mbedtls
+      revision: v3.0.0-ncs1
     - name: nrfxlib
+      repo-path: sdk-nrfxlib
       path: nrfxlib
-      revision: v1.2.0
+      revision: e4c4edba8e152edfb007871a5fc94ff3c152aafb
+    - name: trusted-firmware-m
+      repo-path: sdk-trusted-firmware-m
+      path: modules/tee/tf-m/trusted-firmware-m
+      revision: v1.5.0-ncs1
+    - name: tfm-mcuboot # This is used by the trusted-firmware-m module.
+      repo-path: sdk-mcuboot
+      path: modules/tee/tfm-mcuboot
+      revision: v1.7.2-ncs1
+    - name: matter
+      repo-path: sdk-connectedhomeip
+      path: modules/lib/matter
+      revision: v1.9.0
+      submodules:
+        - name: nlio
+          path: third_party/nlio/repo
+        - name: nlassert
+          path: third_party/nlassert/repo
+        - name: pigweed
+          path: third_party/pigweed/repo
+    - name: nrf-802154
+      repo-path: sdk-nrf-802154
+      path: nrf-802154
+      revision: 11986be74d191f6ea4de17d059cfb87ff7f86dd9
+      groups:
+      - nrf-802154
+    - name: cjson
+      repo-path: sdk-cjson
+      path: modules/lib/cjson
+      revision: c6af068b7f05207b28d68880740e4b9ec1e4b50a
+    - name: homekit
+      repo-path: sdk-homekit
+      revision: 8af6f6d7e511b3dab064afcca9a1932ea1b95d15
+      groups:
+      - homekit
+    - name: find-my
+      repo-path: sdk-find-my
+      revision: 5f376e7fdc717439b95a549b80bacfdb12820097
+      groups:
+      - find-my
+    # Other third-party repositories.
     - name: cmock
       path: test/cmock
-      revision: c243b9a7a7b3c471023193992b46cf1bd1910450
+      revision: 9d092898ef26ece140d9225e037274b64d4f851e
       remote: throwtheswitch
     - name: unity
       path: test/cmock/vendor/unity
-      revision: 031f3bbe45f8adf504ca3d13e6f093869920b091
+      revision: 74cde089e65c3435ce9aa87d5c69f4f16b7f6ade
       remote: throwtheswitch
-    - name: mbedtls-nrf
-      path: mbedtls
-      repo-path: mbedtls
-      revision: mbedtls-2.16.4
-      remote: armmbed
-    - name: civetweb
-      path: modules/lib/civetweb
-      remote: civetweb
-      revision: 99129c5efc907ea613c4b73ccff07581feb58a7a
-    - name: edtt
-      path: tools/edtt
-      remote: zephyrproject
-      revision: dd4dd502ef2fbeced6ef7faaba562a7ddca45632
-    - name: fatfs
-      path: modules/fs/fatfs
-      remote: zephyrproject
-      revision: 9ee6b9b9511151d0d64a74d532d39c6f2bbd4f16
-    - name: hal_nordic
-      path: modules/hal/nordic
-      remote: zephyrproject
-      revision: 12d7647870888e4cb0e421f2b26884c2e76915ac
-    - name: hal_st
-      path: modules/hal/st
-      remote: zephyrproject
-      revision: fa481784b3c49780f18d50bafe00390ccb62b2ec
-    - name: libmetal
-      path: modules/hal/libmetal
-      remote: zephyrproject
-      revision: 45e630d6152824f807d3f919958605c4626cbdff
-    - name: loramac-node
-      path: modules/lib/loramac-node
-      remote: zephyrproject
-      revision: 29e516ec585b1a909af2b5f1c60d83e7d4d563e3
-    - name: lvgl
-      path: modules/lib/gui/lvgl
-      remote: zephyrproject
-      revision: 74fc2e753a997bd71cefa34dd9c56dcb954b42e2
-    - name: nrf_hw_models
-      path: modules/bsim_hw_models/nrf_hw_models
-      remote: zephyrproject
-      revision: fec69703cb1ca06fcdab6d5fde01274f0fc5c759
-    - name: open-amp
-      path: modules/lib/open-amp
-      remote: zephyrproject
-      revision: 9b591b289e1f37339bd038b5a1f0e6c8ad39c63a
+    - name: Alexa-Gadgets-Embedded-Sample-Code
+      path: modules/alexa-embedded
+      revision: face92d8c62184832793f518bb1f19379538c5c1
+      remote: alexa
+    - name: cddl-gen
+      remote: nordicsemi
+      revision: 1c2656daa87ebf4cd3c45ee8eafa336260d589bc
+      path: modules/lib/cddl-gen
+    - name: memfault-firmware-sdk
+      path: modules/lib/memfault-firmware-sdk
+      revision: 0.28.2
+      remote: memfault
     - name: openthread
+      repo-path: sdk-openthread
       path: modules/lib/openthread
-      remote: zephyrproject
-      revision: 3c6191eb4e8ca44b5f4eeaa696837bce14e83c69
-    - name: littlefs
-      path: modules/fs/littlefs
-      remote: zephyrproject
-      revision: fe9572dd5a9fcf93a249daa4233012692bd2881d
-    - name: mipi-sys-t
-      path: modules/debug/mipi-sys-t
-      remote: zephyrproject
-      revision: baf51863f19f009b92e762115ba5572a5b996b92
-    - name: canopennode
-      path: modules/lib/canopennode
-      remote: zephyrproject
-      revision: 5c6b0566d56264efd4bf23ed58bc7cb8b32fe063
+      revision: 02e61a2edd80417e9b8f9a5f4c1b2dad4ac486b4
 
+  # West-related configuration for the nrf repository.
   self:
+    # This repository should be cloned to ncs/nrf.
     path: nrf
+    # This line configures west extensions which are currently only
+    # for internal use by NCS maintainers.
     west-commands: scripts/west-commands.yml

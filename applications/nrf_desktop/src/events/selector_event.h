@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _SELECTOR_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,8 +24,8 @@ extern "C" {
 struct selector_event {
 	struct event_header header;
 
-	u8_t selector_id;
-	u8_t position;
+	uint8_t selector_id;
+	uint8_t position;
 };
 
 EVENT_TYPE_DECLARE(selector_event);

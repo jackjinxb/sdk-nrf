@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _HIDS_EVENT_H_
@@ -9,7 +9,8 @@
 
 #include <bluetooth/services/hids.h>
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 #include "profiler.h"
 #include "hid_report_desc.h"
 
@@ -31,9 +32,8 @@ extern "C" {
 struct hid_notification_event {
 	struct event_header header; /**< Event header. */
 
-	enum in_report report_type; /**< Type of the report. */
-	enum report_mode report_mode;
-	enum bt_gatt_hids_notif_evt event;
+	uint8_t report_id; /**< HID report id. */
+	bool enabled; /**< True if report is enabled. */
 };
 
 EVENT_TYPE_DECLARE(hid_notification_event);

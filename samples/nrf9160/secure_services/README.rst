@@ -1,25 +1,31 @@
 .. _secure_services:
 
-nRF9160: Secure Services Sample
-###############################
+nRF9160: Secure Services
+########################
+
+.. contents::
+   :local:
+   :depth: 2
 
 The Secure Services sample shows how to use the secure services provided by :ref:`secure_partition_manager`.
-This firmware needs :ref:`secure_partition_manager` to also be present on the chip.
+This firmware needs :ref:`secure_partition_manager` to be present on the chip.
+
+Requirements
+************
+
+The sample supports the following development kit:
+
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf9160dk_nrf9160_ns
+
+.. include:: /includes/spm.txt
 
 Overview
 ********
 
 This sample generates random numbers and prints them to the console, sleeps, then reboots.
-This is to demonstrate the :cpp:func:`spm_request_system_reboot` and :cpp:func:`spm_request_random_number` secure services.
-
-Requirements
-************
-
-The following development board:
-
-* |nRF9160DK|
-
-* .. include:: /includes/spm.txt
+This is to demonstrate the :c:func:`spm_request_system_reboot` and :c:func:`spm_request_random_number` secure services.
 
 Building and running
 ********************

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <kernel.h>
@@ -15,6 +15,7 @@
 #include "st25r3911b_spi.h"
 #include "st25r3911b_interrupt.h"
 #include "st25r3911b_common.h"
+#include "st25r3911b_dt.h"
 
 LOG_MODULE_DECLARE(st25r3911b);
 
@@ -44,12 +45,22 @@ LOG_MODULE_DECLARE(st25r3911b);
 #define FIFO_TX_WATER_16_EMPTY (ST25R3911B_MAX_FIFO_LEN - FIFO_TX_WATER_LVL_16)
 #define FIFO_TX_WATER_32_EMPTY (ST25R3911B_MAX_FIFO_LEN - FIFO_TX_WATER_LVL_32)
 
-static struct device *gpio_dev;
+#define NFCA_LED_PORT DT_GPIO_LABEL(ST25R3911B_NODE, led_nfca_gpios)
+#define NFCA_LED_PIN DT_GPIO_PIN(ST25R3911B_NODE, led_nfca_gpios)
 
-static int command_process(u8_t cmd, u32_t *irq_mask, u32_t timeout)
+#define NFCB_LED_PORT DT_GPIO_LABEL(ST25R3911B_NODE, led_nfcb_gpios)
+#define NFCB_LED_PIN DT_GPIO_PIN(ST25R3911B_NODE, led_nfcb_gpios)
+
+#define NFCF_LED_PORT DT_GPIO_LABEL(ST25R3911B_NODE, led_nfcf_gpios)
+#define NFCF_LED_PIN DT_GPIO_PIN(ST25R3911B_NODE, led_nfcf_gpios)
+
+
+static const struct device *gpio_dev;
+
+static int command_process(uint8_t cmd, uint32_t *irq_mask, uint32_t timeout)
 {
 	int err;
-	u32_t status;
+	uint32_t status;
 
 	err = st25r3911b_irq_enable(*irq_mask);
 	if (err) {
@@ -82,8 +93,8 @@ static int command_process(u8_t cmd, u32_t *irq_mask, u32_t timeout)
 static int osc_start(void)
 {
 	int err;
-	u8_t reg = 0;
-	u32_t status;
+	uint8_t reg = 0;
+	uint32_t status;
 
 	err = st25r3911b_reg_read(ST25R3911B_REG_OP_CTRL, &reg);
 	if (err) {
@@ -124,12 +135,12 @@ static int osc_start(void)
 	return 0;
 }
 
-static int measure_voltage(u8_t source, u32_t *voltage)
+static int measure_voltage(uint8_t source, uint32_t *voltage)
 {
 	int err;
-	u8_t reg;
-	u32_t result;
-	u32_t irq_mask;
+	uint8_t reg;
+	uint32_t result;
+	uint32_t irq_mask;
 
 	source &= ST25R3911B_REG_REGULATOR_CTRL_MPSV_MASK;
 
@@ -174,8 +185,8 @@ static int measure_voltage(u8_t source, u32_t *voltage)
 static int calibrate_antenna(void)
 {
 	int err;
-	u8_t reg = 0;
-	u32_t irq_mask;
+	uint8_t reg = 0;
+	uint32_t irq_mask;
 
 	err = st25r3911b_reg_read(ST25R3911B_REG_ANTENNA_CAL_CTRL, &reg);
 	if (err) {
@@ -206,28 +217,28 @@ static int calibrate_antenna(void)
 
 static int rx_tx_enable(void)
 {
-	u8_t mask = ST25R3911B_REG_OP_CTRL_TX_EN |
+	uint8_t mask = ST25R3911B_REG_OP_CTRL_TX_EN |
 		    ST25R3911B_REG_OP_CTRL_RX_EN;
 
 	return st25r3911b_reg_modify(ST25R3911B_REG_OP_CTRL, 0, mask);
 }
 
-static u32_t convert_voltage(u8_t voltage, bool is_5V)
+static uint32_t convert_voltage(uint8_t voltage, bool is_5V)
 {
-	u32_t init_val = is_5V ? POWER_SUPP_5V_INIT_VAL : POWER_SUPP_3V3_INIT_VAL;
-	u32_t step_val = is_5V ? POWER_SUPP_5V_STEP : POWER_SUPP_3V3_STEP;
+	uint32_t init_val = is_5V ? POWER_SUPP_5V_INIT_VAL : POWER_SUPP_3V3_INIT_VAL;
+	uint32_t step_val = is_5V ? POWER_SUPP_5V_STEP : POWER_SUPP_3V3_STEP;
 
 	return init_val + voltage * step_val;
 }
 
-static int adjust_regulator(u32_t *mV_adjust)
+static int adjust_regulator(uint32_t *mV_adjust)
 {
 	int err;
-	u8_t reg;
-	u8_t voltage = 0;
-	u8_t conf = 0;
-	u32_t mV;
-	u32_t irq_mask;
+	uint8_t reg;
+	uint8_t voltage = 0;
+	uint8_t conf = 0;
+	uint32_t mV;
+	uint32_t irq_mask;
 
 	LOG_DBG("Regulator adjustment");
 
@@ -288,19 +299,19 @@ static int adjust_regulator(u32_t *mV_adjust)
 
 int st25r3911b_rx_tx_disable(void)
 {
-	u8_t mask = ST25R3911B_REG_OP_CTRL_TX_EN |
+	uint8_t mask = ST25R3911B_REG_OP_CTRL_TX_EN |
 		    ST25R3911B_REG_OP_CTRL_RX_EN;
 
 	return st25r3911b_reg_modify(ST25R3911B_REG_OP_CTRL, mask, 0);
 }
 
-int st25r3911b_non_response_timer_set(u16_t fc, bool long_range, bool emv)
+int st25r3911b_non_response_timer_set(uint16_t fc, bool long_range, bool emv)
 {
 	int err;
-	u8_t tim_control = 0;
-	u8_t clr_mask = ST25R3911B_REG_TIM_CTRl_NRT_STEP |
+	uint8_t tim_control = 0;
+	uint8_t clr_mask = ST25R3911B_REG_TIM_CTRl_NRT_STEP |
 			ST25R3911B_REG_TIM_CTRl_NRT_EMV;
-	u8_t reg_data[2] = {0};
+	uint8_t reg_data[2] = {0};
 
 	if (emv) {
 		tim_control |= ST25R3911B_REG_TIM_CTRl_NRT_EMV;
@@ -327,7 +338,7 @@ int st25r3911b_non_response_timer_set(u16_t fc, bool long_range, bool emv)
 				    reg_data[1]);
 }
 
-int st25r3911b_mask_receive_timer_set(u32_t fc)
+int st25r3911b_mask_receive_timer_set(uint32_t fc)
 {
 	LOG_DBG("Set mask receive timer to %u fc", fc);
 	return st25r3911b_reg_write(ST25R3911B_REG_MASK_RX_TIM,
@@ -368,7 +379,7 @@ int st25r3911b_init(void)
 		return err;
 	}
 
-	u32_t mV = 0;
+	uint32_t mV = 0;
 
 	/* Measure a supply voltage to detect if device
 	 * is powered by 5V or 3.3V.
@@ -428,10 +439,10 @@ int st25r3911b_init(void)
 	return st25r3911b_cmd_execute(ST25R3911B_CMD_CLEAR);
 }
 
-int st25r3911b_tx_len_set(u16_t len)
+int st25r3911b_tx_len_set(uint16_t len)
 {
 	int err;
-	u8_t msb_val;
+	uint8_t msb_val;
 
 	if (len > ST25R3911B_MAX_TX_LEN) {
 		return -EFAULT;
@@ -456,11 +467,11 @@ int st25r3911b_tx_len_set(u16_t len)
 	return err;
 }
 
-int st25r3911b_field_on(u8_t collision_threshold, u8_t peer_threshold,
-			u8_t delay)
+int st25r3911b_field_on(uint8_t collision_threshold, uint8_t peer_threshold,
+			uint8_t delay)
 {
 	int err;
-	u32_t irq_mask;
+	uint32_t irq_mask;
 
 	if (collision_threshold != ST25R3911B_NO_THRESHOLD_ANTICOLLISION) {
 		err = st25r3911b_reg_modify(ST25R3911B_REG_FIELD_THRESHOLD,
@@ -512,7 +523,7 @@ int st25r3911b_field_on(u8_t collision_threshold, u8_t peer_threshold,
 			/* Wait specific Guard Time when listener
 			 * is exposedto an Unmodulated Carrier.
 			 */
-			k_sleep(delay);
+			k_sleep(K_MSEC(delay));
 
 			return 0;
 		}
@@ -526,30 +537,61 @@ int st25r3911b_field_on(u8_t collision_threshold, u8_t peer_threshold,
 	return -EACCES;
 }
 
-int st25r3911b_technology_led_set(u32_t led, bool on)
+int st25r3911b_technology_led_set(enum st25r3911b_leds led, bool on)
 {
 	int err;
+	gpio_pin_t pin;
+	const char *port;
 
-	gpio_dev = device_get_binding(DT_GPIO_P0_DEV_NAME);
+	switch (led) {
+#if DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfca_gpios)
+	case ST25R3911B_NFCA_LED:
+		pin = NFCA_LED_PIN;
+		port = NFCA_LED_PORT;
+
+		break;
+#endif /* DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfca_gpios) */
+
+#if DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfcb_gpios)
+	case ST25R3911B_NFCB_LED:
+		pin = NFCB_LED_PIN;
+		port = NFCB_LED_PORT;
+
+		break;
+#endif /* DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfcb_gpios) */
+
+#if DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfcf_gpios)
+	case ST25R3911B_NFCF_LED:
+		pin = NFCF_LED_PIN;
+		port = NFCF_LED_PORT;
+
+		break;
+#endif /* DT_NODE_HAS_PROP(ST25R3911B_NODE, led_nfcf_gpios) */
+
+	default:
+		return -ENOTSUP;
+	}
+
+	gpio_dev = device_get_binding(port);
 	if (!gpio_dev) {
 		LOG_ERR("GPIO device binding error.");
 		return -ENXIO;
 	}
 
-	err = gpio_pin_configure(gpio_dev, led,
-				 GPIO_DIR_OUT |
-				 GPIO_PUD_PULL_UP);
+	err = gpio_pin_configure(gpio_dev, pin,
+				 GPIO_OUTPUT |
+				 GPIO_PULL_UP);
 	if (err) {
 		return err;
 	}
 
-	return gpio_pin_write(gpio_dev, led, on);
+	return gpio_pin_set_raw(gpio_dev, pin, on);
 }
 
-int st25r3911b_fifo_reload_lvl_get(u8_t *tx_lvl, u8_t *rx_lvl)
+int st25r3911b_fifo_reload_lvl_get(uint8_t *tx_lvl, uint8_t *rx_lvl)
 {
 	int err;
-	u8_t val;
+	uint8_t val;
 
 	if ((!tx_lvl) || (!rx_lvl)) {
 		return -EINVAL;

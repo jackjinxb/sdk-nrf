@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _PASSKEY_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -23,7 +24,7 @@ extern "C" {
 struct passkey_input_event {
 	struct event_header header;
 
-	u32_t passkey;
+	uint32_t passkey;
 };
 
 EVENT_TYPE_DECLARE(passkey_input_event);

@@ -1,13 +1,15 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <event_manager.h>
 #include <config_event.h>
-
 #include <logging/log.h>
+
+#define MODULE main
+
 LOG_MODULE_REGISTER(MODULE);
 
 #define INIT_VALUE1 3

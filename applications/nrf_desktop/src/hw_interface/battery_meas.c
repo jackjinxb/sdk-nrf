@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr/types.h>
@@ -14,18 +14,18 @@
 
 #include <hal/nrf_saadc.h>
 
-#include "event_manager.h"
-#include "power_event.h"
+#include <event_manager.h>
+#include <caf/events/power_event.h>
 #include "battery_event.h"
 #include "battery_def.h"
 
 #define MODULE battery_meas
-#include "module_state_event.h"
+#include <caf/events/module_state_event.h>
 
 #include <logging/log.h>
 LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_BATTERY_MEAS_LOG_LEVEL);
 
-#define ADC_DEVICE_NAME		DT_ADC_0_NAME
+#define ADC_DEVICE_NAME		DT_LABEL(DT_NODELABEL(adc))
 #define ADC_RESOLUTION		12
 #define ADC_OVERSAMPLING	4 /* 2^ADC_OVERSAMPLING samples are averaged */
 #define ADC_MAX 		4096
@@ -51,18 +51,18 @@ LOG_MODULE_REGISTER(MODULE, CONFIG_DESKTOP_BATTERY_MEAS_LOG_LEVEL);
 				 * ADC_REF_INTERNAL_MV / ADC_MAX)
 #endif
 
-static struct device *adc_dev;
-static s16_t adc_buffer;
+static const struct device *adc_dev;
+static int16_t adc_buffer;
 static bool adc_async_read_pending;
 
-static struct k_delayed_work battery_lvl_read;
+static struct k_work_delayable battery_lvl_read;
 static struct k_poll_signal async_sig = K_POLL_SIGNAL_INITIALIZER(async_sig);
 static struct k_poll_event  async_evt =
 	K_POLL_EVENT_INITIALIZER(K_POLL_TYPE_SIGNAL,
 				 K_POLL_MODE_NOTIFY_ONLY,
 				 &async_sig);
 
-static struct device *gpio_dev;
+static const struct device *gpio_dev;
 
 static atomic_t active;
 static bool sampling;
@@ -91,7 +91,7 @@ static int init_adc(void)
 	}
 
 	/* Check if number of elements in LUT is proper */
-	BUILD_ASSERT_MSG(CONFIG_DESKTOP_BATTERY_MEAS_MAX_LEVEL
+	BUILD_ASSERT(CONFIG_DESKTOP_BATTERY_MEAS_MAX_LEVEL
 			 - CONFIG_DESKTOP_BATTERY_MEAS_MIN_LEVEL
 			 == (ARRAY_SIZE(battery_voltage_to_soc) - 1)
 			 * CONFIG_DESKTOP_VOLTAGE_TO_SOC_DELTA,
@@ -103,9 +103,9 @@ static int init_adc(void)
 static int battery_monitor_start(void)
 {
 	if (IS_ENABLED(CONFIG_DESKTOP_BATTERY_MEAS_HAS_ENABLE_PIN)) {
-		int err = gpio_pin_write(gpio_dev,
-					 CONFIG_DESKTOP_BATTERY_MEAS_ENABLE_PIN,
-					 1);
+		int err = gpio_pin_set_raw(gpio_dev,
+					   CONFIG_DESKTOP_BATTERY_MEAS_ENABLE_PIN,
+					   1);
 		if (err) {
 			 LOG_ERR("Cannot enable battery monitor circuit");
 			 return err;
@@ -113,7 +113,7 @@ static int battery_monitor_start(void)
 	}
 
 	sampling = true;
-	k_delayed_work_submit(&battery_lvl_read,
+	k_work_reschedule(&battery_lvl_read,
 			      K_MSEC(BATTERY_WORK_INTERVAL));
 
 	return 0;
@@ -121,14 +121,15 @@ static int battery_monitor_start(void)
 
 static void battery_monitor_stop(void)
 {
-	k_delayed_work_cancel(&battery_lvl_read);
+	/* Cancel cannot fail if executed from another work's context. */
+	(void)k_work_cancel_delayable(&battery_lvl_read);
 	sampling = false;
 	int err = 0;
 
 	if (IS_ENABLED(CONFIG_DESKTOP_BATTERY_MEAS_HAS_ENABLE_PIN)) {
-		err = gpio_pin_write(gpio_dev,
-				     CONFIG_DESKTOP_BATTERY_MEAS_ENABLE_PIN,
-				     0);
+		err = gpio_pin_set_raw(gpio_dev,
+				       CONFIG_DESKTOP_BATTERY_MEAS_ENABLE_PIN,
+				       0);
 		if (err) {
 			LOG_ERR("Cannot disable battery monitor circuit");
 			module_set_state(MODULE_STATE_ERROR);
@@ -142,8 +143,8 @@ static void battery_monitor_stop(void)
 
 static void battery_lvl_process(void)
 {
-	u32_t voltage = BATTERY_VOLTAGE(adc_buffer);
-	u8_t level;
+	uint32_t voltage = BATTERY_VOLTAGE(adc_buffer);
+	uint8_t level;
 
 	if (voltage > CONFIG_DESKTOP_BATTERY_MEAS_MAX_LEVEL) {
 		level = 100;
@@ -216,7 +217,7 @@ static void battery_lvl_read_fn(struct k_work *work)
 	}
 
 	if (atomic_get(&active) || adc_async_read_pending) {
-		k_delayed_work_submit(&battery_lvl_read,
+		k_work_reschedule(&battery_lvl_read,
 				      K_MSEC(BATTERY_WORK_INTERVAL));
 	} else {
 		battery_monitor_stop();
@@ -228,7 +229,7 @@ static int init_fn(void)
 	int err = 0;
 
 	if (IS_ENABLED(CONFIG_DESKTOP_BATTERY_MEAS_HAS_ENABLE_PIN)) {
-		gpio_dev = device_get_binding(DT_GPIO_P0_DEV_NAME);
+		gpio_dev = device_get_binding(DT_LABEL(DT_NODELABEL(gpio0)));
 		if (!gpio_dev) {
 			LOG_ERR("Cannot get GPIO device");
 			err = -ENXIO;
@@ -238,7 +239,7 @@ static int init_fn(void)
 		/* Enable battery monitoring */
 		err = gpio_pin_configure(gpio_dev,
 					 CONFIG_DESKTOP_BATTERY_MEAS_ENABLE_PIN,
-					 GPIO_DIR_OUT);
+					 GPIO_OUTPUT);
 	}
 
 	if (!err) {
@@ -249,7 +250,7 @@ static int init_fn(void)
 		goto error;
 	}
 
-	k_delayed_work_init(&battery_lvl_read, battery_lvl_read_fn);
+	k_work_init_delayable(&battery_lvl_read, battery_lvl_read_fn);
 
 	err = battery_monitor_start();
 error:
@@ -305,7 +306,7 @@ static bool event_handler(const struct event_header *eh)
 			if (adc_async_read_pending) {
 				__ASSERT_NO_MSG(sampling);
 				/* Poll ADC and postpone shutdown */
-				k_delayed_work_submit(&battery_lvl_read,
+				k_work_reschedule(&battery_lvl_read,
 						      K_MSEC(0));
 			} else {
 				/* No ADC sample left to read, go to standby */

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <bluetooth/bluetooth.h>
@@ -23,15 +23,24 @@ static const struct bt_mesh_onoff_srv_handlers onoff_handlers = {
 
 struct led_ctx {
 	struct bt_mesh_onoff_srv srv;
-	struct k_delayed_work work;
-	u32_t remaining;
+	struct k_work_delayable work;
+	uint32_t remaining;
 	bool value;
 };
 
-static struct led_ctx led_ctx[4] = {
-	[0 ... 3] = {
-		.srv = BT_MESH_ONOFF_SRV_INIT(&onoff_handlers),
-	}
+static struct led_ctx led_ctx[] = {
+#if DT_NODE_EXISTS(DT_ALIAS(led0))
+	{ .srv = BT_MESH_ONOFF_SRV_INIT(&onoff_handlers) },
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led1))
+	{ .srv = BT_MESH_ONOFF_SRV_INIT(&onoff_handlers) },
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led2))
+	{ .srv = BT_MESH_ONOFF_SRV_INIT(&onoff_handlers) },
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led3))
+	{ .srv = BT_MESH_ONOFF_SRV_INIT(&onoff_handlers) },
+#endif
 };
 
 static void led_transition_start(struct led_ctx *led)
@@ -42,14 +51,15 @@ static void led_transition_start(struct led_ctx *led)
 	 * state is "on":
 	 */
 	dk_set_led(led_idx, true);
-	k_delayed_work_submit(&led->work, led->remaining);
+	k_work_reschedule(&led->work, K_MSEC(led->remaining));
 	led->remaining = 0;
 }
 
 static void led_status(struct led_ctx *led, struct bt_mesh_onoff_status *status)
 {
-	status->remaining_time =
-		k_delayed_work_remaining_get(&led->work) + led->remaining;
+	/* Do not include delay in the remaining time. */
+	status->remaining_time = led->remaining ? led->remaining :
+		k_ticks_to_ms_ceil32(k_work_delayable_remaining_get(&led->work));
 	status->target_on_off = led->value;
 	/* As long as the transition is in progress, the onoff state is "on": */
 	status->present_on_off = led->value || status->remaining_time;
@@ -67,14 +77,18 @@ static void led_set(struct bt_mesh_onoff_srv *srv, struct bt_mesh_msg_ctx *ctx,
 	}
 
 	led->value = set->on_off;
+	if (!bt_mesh_model_transition_time(set->transition)) {
+		led->remaining = 0;
+		dk_set_led(led_idx, set->on_off);
+		goto respond;
+	}
+
 	led->remaining = set->transition->time;
 
-	if (set->transition->delay > 0) {
-		k_delayed_work_submit(&led->work, set->transition->delay);
-	} else if (set->transition->time > 0) {
-		led_transition_start(led);
+	if (set->transition->delay) {
+		k_work_reschedule(&led->work, K_MSEC(set->transition->delay));
 	} else {
-		dk_set_led(led_idx, set->on_off);
+		led_transition_start(led);
 	}
 
 respond:
@@ -109,46 +123,48 @@ static void led_work(struct k_work *work)
 	}
 }
 
-/** Configuration server definition */
-static struct bt_mesh_cfg_srv cfg_srv = {
-	.relay = IS_ENABLED(CONFIG_BT_MESH_RELAY),
-	.beacon = BT_MESH_BEACON_ENABLED,
-	.frnd = IS_ENABLED(CONFIG_BT_MESH_FRIEND),
-	.gatt_proxy = IS_ENABLED(CONFIG_BT_MESH_GATT_PROXY),
-	.default_ttl = 7,
-
-	/* 3 transmissions with 20ms interval */
-	.net_transmit = BT_MESH_TRANSMIT(2, 20),
-	.relay_retransmit = BT_MESH_TRANSMIT(2, 20),
-};
-
 /* Set up a repeating delayed work to blink the DK's LEDs when attention is
  * requested.
  */
-static struct k_delayed_work attention_blink_work;
+static struct k_work_delayable attention_blink_work;
+static bool attention;
 
 static void attention_blink(struct k_work *work)
 {
 	static int idx;
-	const u8_t pattern[] = {
-		BIT(0) | BIT(1),
-		BIT(1) | BIT(2),
-		BIT(2) | BIT(3),
-		BIT(3) | BIT(0),
+	const uint8_t pattern[] = {
+#if DT_NODE_EXISTS(DT_ALIAS(led0))
+		BIT(0),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led1))
+		BIT(1),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led2))
+		BIT(2),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led3))
+		BIT(3),
+#endif
 	};
-	dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
-	k_delayed_work_submit(&attention_blink_work, K_MSEC(30));
+
+	if (attention) {
+		dk_set_leds(pattern[idx++ % ARRAY_SIZE(pattern)]);
+		k_work_reschedule(&attention_blink_work, K_MSEC(30));
+	} else {
+		dk_set_leds(DK_NO_LEDS_MSK);
+	}
 }
 
 static void attention_on(struct bt_mesh_model *mod)
 {
-	k_delayed_work_submit(&attention_blink_work, K_NO_WAIT);
+	attention = true;
+	k_work_reschedule(&attention_blink_work, K_NO_WAIT);
 }
 
 static void attention_off(struct bt_mesh_model *mod)
 {
-	k_delayed_work_cancel(&attention_blink_work);
-	dk_set_leds(DK_NO_LEDS_MSK);
+	/* Will stop rescheduling blink timer */
+	attention = false;
 }
 
 static const struct bt_mesh_health_srv_cb health_srv_cb = {
@@ -163,21 +179,29 @@ static struct bt_mesh_health_srv health_srv = {
 BT_MESH_HEALTH_PUB_DEFINE(health_pub, 0);
 
 static struct bt_mesh_elem elements[] = {
+#if DT_NODE_EXISTS(DT_ALIAS(led0))
 	BT_MESH_ELEM(
 		1, BT_MESH_MODEL_LIST(
-			BT_MESH_MODEL_CFG_SRV(&cfg_srv),
+			BT_MESH_MODEL_CFG_SRV,
 			BT_MESH_MODEL_HEALTH_SRV(&health_srv, &health_pub),
 			BT_MESH_MODEL_ONOFF_SRV(&led_ctx[0].srv)),
 		BT_MESH_MODEL_NONE),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led1))
 	BT_MESH_ELEM(
 		2, BT_MESH_MODEL_LIST(BT_MESH_MODEL_ONOFF_SRV(&led_ctx[1].srv)),
 		BT_MESH_MODEL_NONE),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led2))
 	BT_MESH_ELEM(
 		3, BT_MESH_MODEL_LIST(BT_MESH_MODEL_ONOFF_SRV(&led_ctx[2].srv)),
 		BT_MESH_MODEL_NONE),
+#endif
+#if DT_NODE_EXISTS(DT_ALIAS(led3))
 	BT_MESH_ELEM(
 		4, BT_MESH_MODEL_LIST(BT_MESH_MODEL_ONOFF_SRV(&led_ctx[3].srv)),
 		BT_MESH_MODEL_NONE),
+#endif
 };
 
 static const struct bt_mesh_comp comp = {
@@ -188,10 +212,10 @@ static const struct bt_mesh_comp comp = {
 
 const struct bt_mesh_comp *model_handler_init(void)
 {
-	k_delayed_work_init(&attention_blink_work, attention_blink);
+	k_work_init_delayable(&attention_blink_work, attention_blink);
 
 	for (int i = 0; i < ARRAY_SIZE(led_ctx); ++i) {
-		k_delayed_work_init(&led_ctx[i].work, led_work);
+		k_work_init_delayable(&led_ctx[i].work, led_work);
 	}
 
 	return &comp;

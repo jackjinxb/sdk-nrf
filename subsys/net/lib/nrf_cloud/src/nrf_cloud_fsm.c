@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2017 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include "nrf_cloud_fsm.h"
@@ -12,21 +12,6 @@
 #include <logging/log.h>
 
 LOG_MODULE_REGISTER(nrf_cloud_fsm, CONFIG_NRF_CLOUD_LOG_LEVEL);
-
-/**@brief Identifier for cloud state request.
- * Can be any unique unsigned 16-bit integer value except zero.
- */
-#define CLOUD_STATE_REQ_ID 5678
-
-/**@brief Identifier for message sent to report status in UA_COMPLETE state.
- * Can be any unique unsigned 16-bit integer value except zero.
- */
-#define PAIRING_STATUS_REPORT_ID 7890
-
-/**@brief Default message identifier.
- * Can be any unique unsigned 16-bit integer value except zero.
- */
-#define DEFAULT_REPORT_ID 1
 
 typedef int (*fsm_transition)(const struct nct_evt *nct_evt);
 
@@ -46,11 +31,13 @@ static int handle_pin_complete(const struct nct_evt *nct_evt);
 static int handle_device_config_update(const struct nct_evt *const evt,
 				       bool *const config_found);
 
-/* Drop all the events. */
-static const fsm_transition not_implemented_fsm_transition[NCT_EVT_TOTAL];
+static const fsm_transition idle_fsm_transition[NCT_EVT_TOTAL] = {
+	[NCT_EVT_DISCONNECTED] = disconnection_handler,
+};
 
 static const fsm_transition initialized_fsm_transition[NCT_EVT_TOTAL] = {
 	[NCT_EVT_CONNECTED] = connection_handler,
+	[NCT_EVT_DISCONNECTED] = disconnection_handler,
 };
 
 static const fsm_transition connected_fsm_transition[NCT_EVT_TOTAL] = {
@@ -101,7 +88,7 @@ static const fsm_transition dc_connected_fsm_transition[NCT_EVT_TOTAL] = {
 };
 
 static const fsm_transition *state_event_handlers[] = {
-	[STATE_IDLE] = not_implemented_fsm_transition,
+	[STATE_IDLE] = idle_fsm_transition,
 	[STATE_INITIALIZED] = initialized_fsm_transition,
 	[STATE_CONNECTED] = connected_fsm_transition,
 	[STATE_CC_CONNECTING] = cc_connecting_fsm_transition,
@@ -111,14 +98,22 @@ static const fsm_transition *state_event_handlers[] = {
 	[STATE_UA_PIN_COMPLETE] = ua_complete_fsm_transition,
 	[STATE_DC_CONNECTING] = dc_connecting_fsm_transition,
 	[STATE_DC_CONNECTED] = dc_connected_fsm_transition,
-	[STATE_READY] = not_implemented_fsm_transition,
-	[STATE_DISCONNECTING] = not_implemented_fsm_transition,
-	[STATE_ERROR] = not_implemented_fsm_transition,
 };
 BUILD_ASSERT(ARRAY_SIZE(state_event_handlers) == STATE_TOTAL);
 
+static bool persistent_session;
+
+#if defined(CONFIG_NRF_CLOUD_CELL_POS) && defined(CONFIG_NRF_CLOUD_MQTT)
+static nrf_cloud_cell_pos_response_t cell_pos_cb;
+void nfsm_set_cell_pos_response_cb(nrf_cloud_cell_pos_response_t cb)
+{
+	cell_pos_cb = cb;
+}
+#endif
+
 int nfsm_init(void)
 {
+	persistent_session = false;
 	return 0;
 }
 
@@ -152,7 +147,7 @@ static int state_ua_pin_wait(void)
 	int err;
 	struct nct_cc_data msg = {
 		.opcode = NCT_CC_OPCODE_UPDATE_REQ,
-		.id = DEFAULT_REPORT_ID,
+		.message_id = NCT_MSG_ID_STATE_REPORT,
 	};
 
 	/* Publish report to the cloud on current status. */
@@ -186,7 +181,7 @@ static int handle_device_config_update(const struct nct_evt *const evt,
 	int err;
 	struct nct_cc_data msg = {
 		.opcode = NCT_CC_OPCODE_UPDATE_REQ,
-		.id = DEFAULT_REPORT_ID,
+		.message_id = NCT_MSG_ID_STATE_REPORT,
 	};
 
 	struct nrf_cloud_evt cloud_evt = {
@@ -222,6 +217,8 @@ static int handle_device_config_update(const struct nct_evt *const evt,
 	}
 
 	cloud_evt.data = evt->param.cc->data;
+	cloud_evt.topic = evt->param.cc->topic;
+
 	nfsm_set_current_state_and_notify(nfsm_get_current_state(), &cloud_evt);
 
 	return err;
@@ -232,7 +229,7 @@ static int state_ua_pin_complete(void)
 	int err;
 	struct nct_cc_data msg = {
 		.opcode = NCT_CC_OPCODE_UPDATE_REQ,
-		.id = PAIRING_STATUS_REPORT_ID,
+		.message_id = NCT_MSG_ID_PAIR_STATUS_REPORT,
 	};
 
 	err = nrf_cloud_encode_state(STATE_UA_PIN_COMPLETE, &msg.data);
@@ -276,20 +273,32 @@ static int connection_handler(const struct nct_evt *nct_evt)
 	 */
 	if (nct_evt->status != 0) {
 		evt.type = NRF_CLOUD_EVT_ERROR;
-		nfsm_set_current_state_and_notify(STATE_CONNECTED, &evt);
+		evt.status = nct_evt->status;
+		nfsm_set_current_state_and_notify(nfsm_get_current_state(),
+						  &evt);
 		return 0;
 	}
 
 	evt.type = NRF_CLOUD_EVT_TRANSPORT_CONNECTED;
+	evt.status = nct_evt->param.flag;
 	nfsm_set_current_state_and_notify(STATE_CONNECTED, &evt);
 
 	/* Connect the control channel now. */
-	err = nct_cc_connect();
-	if (err) {
-		return err;
+	persistent_session = nct_evt->param.flag;
+	if (!persistent_session) {
+		err = nct_cc_connect();
+		if (err) {
+			return err;
+		}
+		nfsm_set_current_state_and_notify(STATE_CC_CONNECTING, NULL);
+	} else {
+		struct nct_evt nevt = { .type = NCT_EVT_CC_CONNECTED,
+					.status = 0 };
+
+		LOG_DBG("Previous session valid; skipping nct_cc_connect()");
+		nfsm_handle_incoming_event(&nevt, STATE_CC_CONNECTING);
 	}
 
-	nfsm_set_current_state_and_notify(STATE_CC_CONNECTING, NULL);
 
 	return 0;
 }
@@ -299,9 +308,14 @@ static int disconnection_handler(const struct nct_evt *nct_evt)
 	/* Set the state to INITIALIZED and notify the application of
 	 * disconnection.
 	 */
-	const struct nrf_cloud_evt evt = {
-		.type = NRF_CLOUD_EVT_TRANSPORT_DISCONNECTED
+	struct nrf_cloud_evt evt = {
+		.type = NRF_CLOUD_EVT_TRANSPORT_DISCONNECTED,
+		.status = NRF_CLOUD_DISCONNECT_CLOSED_BY_REMOTE,
 	};
+
+	if (nfsm_get_disconnect_requested()) {
+		evt.status = NRF_CLOUD_DISCONNECT_USER_REQUEST;
+	}
 
 	nfsm_set_current_state_and_notify(STATE_INITIALIZED, &evt);
 
@@ -315,7 +329,7 @@ static int cc_connection_handler(const struct nct_evt *nct_evt)
 	 */
 	static const struct nct_cc_data get_request = {
 		.opcode = NCT_CC_OPCODE_GET_REQ,
-		.id = CLOUD_STATE_REQ_ID,
+		.message_id = NCT_MSG_ID_STATE_REQUEST,
 	};
 
 	int err;
@@ -324,7 +338,9 @@ static int cc_connection_handler(const struct nct_evt *nct_evt)
 	};
 
 	if (nct_evt->status != 0) {
-		nfsm_set_current_state_and_notify(STATE_ERROR, &evt);
+		/* Send error event and initiate disconnect */
+		nfsm_set_current_state_and_notify(nfsm_get_current_state(), &evt);
+		(void)nct_dc_disconnect();
 		return 0;
 	}
 
@@ -348,16 +364,17 @@ static int handle_pin_complete(const struct nct_evt *nct_evt)
 	const struct nrf_cloud_data *payload = &nct_evt->param.cc->data;
 	struct nrf_cloud_data rx;
 	struct nrf_cloud_data tx;
+	struct nrf_cloud_data bulk;
 	struct nrf_cloud_data endpoint;
 
-	err = nrf_cloud_decode_data_endpoint(payload, &tx, &rx, &endpoint);
+	err = nrf_cloud_decode_data_endpoint(payload, &tx, &rx, &bulk, &endpoint);
 	if (err) {
 		LOG_ERR("nrf_cloud_decode_data_endpoint failed %d", err);
 		return err;
 	}
 
 	/* Set the endpoint information. */
-	nct_dc_endpoint_set(&tx, &rx, &endpoint);
+	nct_dc_endpoint_set(&tx, &rx, &bulk, &endpoint);
 
 	return state_ua_pin_complete();
 }
@@ -375,12 +392,13 @@ static int cc_rx_data_handler(const struct nct_evt *nct_evt)
 	err = nrf_cloud_decode_requested_state(payload, &new_state);
 
 	if (err) {
+#ifndef CONFIG_NRF_CLOUD_GATEWAY
 		if (!config_found) {
 			LOG_ERR("nrf_cloud_decode_requested_state Failed %d",
 				err);
 			return err;
 		}
-
+#endif
 		/* Config only, nothing else to do */
 		return 0;
 	}
@@ -391,6 +409,17 @@ static int cc_rx_data_handler(const struct nct_evt *nct_evt)
 	case STATE_UA_PIN_WAIT:
 	case STATE_UA_PIN_COMPLETE:
 		if (new_state == STATE_UA_PIN_COMPLETE) {
+			/* If the config was found, the shadow data has already been sent */
+			if (!config_found) {
+				struct nrf_cloud_evt cloud_evt = {
+					.type = NRF_CLOUD_EVT_RX_DATA,
+					.data = nct_evt->param.cc->data,
+					.topic = nct_evt->param.cc->topic
+				};
+				/* Send shadow data to application */
+				nfsm_set_current_state_and_notify(nfsm_get_current_state(),
+								  &cloud_evt);
+			}
 			return handle_pin_complete(nct_evt);
 		} else if (new_state == STATE_UA_PIN_WAIT) {
 			return state_ua_pin_wait();
@@ -414,19 +443,35 @@ static int cc_tx_ack_handler(const struct nct_evt *nct_evt)
 {
 	int err;
 
-	if (nct_evt->param.data_id == CLOUD_STATE_REQ_ID) {
+	if (nct_evt->param.message_id == NCT_MSG_ID_STATE_REQUEST) {
 		nfsm_set_current_state_and_notify(STATE_CLOUD_STATE_REQUESTED,
 						  NULL);
 		return 0;
-	}
+	} else if (nct_evt->param.message_id == NCT_MSG_ID_PAIR_STATUS_REPORT) {
+		if (!persistent_session) {
+			err = nct_dc_connect();
+			if (err) {
+				return err;
+			}
 
-	if (nct_evt->param.data_id == PAIRING_STATUS_REPORT_ID) {
-		err = nct_dc_connect();
-		if (err) {
-			return err;
+			nfsm_set_current_state_and_notify(STATE_DC_CONNECTING,
+							  NULL);
+		} else {
+			struct nct_evt nevt = { .type = NCT_EVT_DC_CONNECTED,
+						.status = 0 };
+
+			LOG_DBG("Previous session valid; skipping nct_dc_connect()");
+			nfsm_handle_incoming_event(&nevt, STATE_DC_CONNECTING);
 		}
+	} else if (IS_VALID_USER_TAG(nct_evt->param.message_id)) {
+		struct nrf_cloud_evt evt = {
+			.type = NRF_CLOUD_EVT_SENSOR_DATA_ACK,
+			.data.len = sizeof(nct_evt->param.message_id),
+			.data.ptr = &nct_evt->param.message_id
+		};
 
-		nfsm_set_current_state_and_notify(STATE_DC_CONNECTING, NULL);
+		LOG_DBG("Data ACK for user tag: %u", nct_evt->param.message_id);
+		nfsm_set_current_state_and_notify(nfsm_get_current_state(), &evt);
 	}
 
 	return 0;
@@ -434,7 +479,7 @@ static int cc_tx_ack_handler(const struct nct_evt *nct_evt)
 
 static int cc_tx_ack_in_state_requested_handler(const struct nct_evt *nct_evt)
 {
-	if (nct_evt->param.data_id == CLOUD_STATE_REQ_ID) {
+	if (nct_evt->param.message_id == NCT_MSG_ID_STATE_REQUEST) {
 		nfsm_set_current_state_and_notify(STATE_CLOUD_STATE_REQUESTED,
 						  NULL);
 	}
@@ -458,15 +503,53 @@ static int dc_connection_handler(const struct nct_evt *nct_evt)
 	return 0;
 }
 
+static int cell_pos_cb_send(const char *const rx_buf)
+{
+#if defined(CONFIG_NRF_CLOUD_CELL_POS) && defined(CONFIG_NRF_CLOUD_MQTT)
+	if (cell_pos_cb) {
+		struct nrf_cloud_cell_pos_result res;
+		int ret = nrf_cloud_cell_pos_process(rx_buf, &res);
+
+		if (ret <= 0) {
+			if (ret == 0) {
+				/* Successfully parsed, send to callback */
+				cell_pos_cb(&res);
+			}
+			/* Clear the callback after use */
+			nfsm_set_cell_pos_response_cb(NULL);
+			return 0;
+		}
+		/* ret == 1 indicates that no cell pos data was found, send to app */
+	}
+#endif
+	return -EFTYPE;
+}
+
 static int dc_rx_data_handler(const struct nct_evt *nct_evt)
 {
 	struct nrf_cloud_evt cloud_evt = {
 		.type = NRF_CLOUD_EVT_RX_DATA,
 		.data = nct_evt->param.dc->data,
+		.topic = nct_evt->param.dc->topic,
 	};
 
-	/* All data is forwared to the app */
+	bool discon_req = nrf_cloud_detect_disconnection_request(nct_evt->param.dc->data.ptr);
+
+	/* All data is forwared to the app... unless a callback is registered */
+	if (cell_pos_cb_send(nct_evt->param.dc->data.ptr) == 0) {
+		return 0;
+	}
+
 	nfsm_set_current_state_and_notify(nfsm_get_current_state(), &cloud_evt);
+
+	if (discon_req) {
+		LOG_DBG("Device deleted from nRF Cloud");
+		int err = nrf_cloud_disconnect();
+
+		if (err < 0) {
+			LOG_ERR("nRF Cloud disconnection-on-delete failure, error: %d", err);
+		}
+	}
 
 	return 0;
 }

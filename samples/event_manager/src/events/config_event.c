@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -15,7 +15,7 @@ static void profile_config_event(struct log_event_buf *buf,
 	struct config_event *event = cast_config_event(eh);
 
 	ARG_UNUSED(event);
-	profiler_log_encode_u32(buf, event->init_value1);
+	profiler_log_encode_int8(buf, event->init_value1);
 }
 
 static int log_config_event(const struct event_header *eh, char *buf,
@@ -23,7 +23,8 @@ static int log_config_event(const struct event_header *eh, char *buf,
 {
 	struct config_event *event = cast_config_event(eh);
 
-	return snprintf(buf, buf_len, "init_val_1=%d", event->init_value1);
+	EVENT_MANAGER_LOG(eh, "init_val_1=%d", event->init_value1);
+	return 0;
 }
 
 EVENT_INFO_DEFINE(config_event,

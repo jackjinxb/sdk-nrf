@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -11,6 +11,7 @@
 #include <logging/log.h>
 
 #include "common_test.h"
+
 #include <mbedtls/ecdsa.h>
 
 /* Setting LOG_LEVEL_DBG might affect time measurements! */
@@ -34,62 +35,67 @@ static test_vector_ecdsa_random_t *p_test_vector_random;
 
 static size_t hash_len;
 
-__attribute__((noinline)) static void unhexify_ecdsa_verify(void)
-{
-	hash_len = hex2bin(p_test_vector_verify->p_input,
-			   strlen(p_test_vector_verify->p_input),
-			   m_ecdsa_input_buf,
-			   strlen(p_test_vector_verify->p_input));
-}
-
-__attribute__((noinline)) static void unhexify_ecdsa_sign(void)
-{
-	hash_len =
-		hex2bin(p_test_vector_sign->p_input,
-			strlen(p_test_vector_sign->p_input), m_ecdsa_input_buf,
-			strlen(p_test_vector_sign->p_input));
-}
-
-__attribute__((noinline)) static void unhexify_ecdsa_random(void)
-{
-	hash_len = hex2bin(p_test_vector_random->p_input,
-			   strlen(p_test_vector_random->p_input),
-			   m_ecdsa_input_buf,
-			   strlen(p_test_vector_random->p_input));
-}
-
-void ecdsa_clear_buffers(void)
-{
-	memset(m_ecdsa_input_buf, 0x00, sizeof(m_ecdsa_input_buf));
-}
+void ecdsa_clear_buffers(void);
+void unhexify_ecdsa_verify(void);
+void unhexify_ecdsa_sign(void);
+void unhexify_ecdsa_random(void);
 
 /**@brief Function for running the test setup.
  */
-void ecdsa_setup_verify(void)
+static void ecdsa_setup_verify(void)
 {
-	ecdsa_clear_buffers();
 	static int i;
+
+	ecdsa_clear_buffers();
 	p_test_vector_verify = ITEM_GET(test_vector_ecdsa_verify_data,
 					test_vector_ecdsa_verify_t, i++);
 	unhexify_ecdsa_verify();
 }
 
-void ecdsa_setup_sign(void)
+static void ecdsa_setup_sign(void)
 {
-	ecdsa_clear_buffers();
 	static int i;
+
+	ecdsa_clear_buffers();
 	p_test_vector_sign = ITEM_GET(test_vector_ecdsa_sign_data,
 				      test_vector_ecdsa_sign_t, i++);
 	unhexify_ecdsa_sign();
 }
 
-void ecdsa_setup_random(void)
+static void ecdsa_setup_random(void)
 {
-	ecdsa_clear_buffers();
 	static int i;
+
+	ecdsa_clear_buffers();
 	p_test_vector_random = ITEM_GET(test_vector_ecdsa_random_data,
 					test_vector_ecdsa_random_t, i++);
 	unhexify_ecdsa_random();
+}
+
+__attribute__((noinline)) void unhexify_ecdsa_verify(void)
+{
+	hash_len = hex2bin_safe(p_test_vector_verify->p_input,
+				m_ecdsa_input_buf,
+				sizeof(m_ecdsa_input_buf));
+}
+
+__attribute__((noinline)) void unhexify_ecdsa_sign(void)
+{
+	hash_len = hex2bin_safe(p_test_vector_sign->p_input,
+				m_ecdsa_input_buf,
+				sizeof(m_ecdsa_input_buf));
+}
+
+__attribute__((noinline)) void unhexify_ecdsa_random(void)
+{
+	hash_len = hex2bin_safe(p_test_vector_random->p_input,
+				m_ecdsa_input_buf,
+				sizeof(m_ecdsa_input_buf));
+}
+
+void ecdsa_clear_buffers(void)
+{
+	memset(m_ecdsa_input_buf, 0x00, sizeof(m_ecdsa_input_buf));
 }
 
 /**@brief Function for the ECDSA sign test execution.
@@ -134,9 +140,10 @@ void exec_test_case_ecdsa_sign(void)
 	mbedtls_mpi_init(&s);
 
 	start_time_measurement();
+
 	err_code = mbedtls_ecdsa_sign(&ctx_sign.grp, &r, &s, &ctx_sign.d,
 				      m_ecdsa_input_buf, hash_len,
-				      mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+				      drbg_random, &drbg_ctx);
 
 	stop_time_measurement();
 
@@ -237,7 +244,6 @@ void exec_test_case_ecdsa_random(void)
 {
 	int err_code = -1;
 
-	start_time_measurement();
 
 	/* Prepare signer context. */
 	mbedtls_ecdsa_context ctx_sign;
@@ -246,7 +252,7 @@ void exec_test_case_ecdsa_random(void)
 	/* Create a ECDSA key pair */
 	err_code = mbedtls_ecdsa_genkey(&ctx_sign,
 					p_test_vector_random->curve_type,
-					mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+					drbg_random, &drbg_ctx);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
 	/* Verify keys. */
@@ -265,9 +271,11 @@ void exec_test_case_ecdsa_random(void)
 	mbedtls_mpi_init(&r);
 	mbedtls_mpi_init(&s);
 
+	start_time_measurement();
 	err_code = mbedtls_ecdsa_sign(&ctx_sign.grp, &r, &s, &ctx_sign.d,
 				      m_ecdsa_input_buf, hash_len,
-				      mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+				      drbg_random, &drbg_ctx);
+	stop_time_measurement();
 
 	/* Prepare verification context. */
 	mbedtls_ecdsa_context ctx_verify;
@@ -297,7 +305,6 @@ void exec_test_case_ecdsa_random(void)
 	/* Verify failure. */
 	TEST_VECTOR_ASSERT_NOT_EQUAL(0, err_code);
 
-	stop_time_measurement();
 
 	/* Free resources. */
 	mbedtls_mpi_free(&r);

@@ -1,0 +1,10 @@
+#
+# Copyright (c) 2021 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+rsource "cddl-gen/Kconfig"
+rsource "mbedtls/Kconfig"
+osource "$(NCS_MEMFAULT_FIRMWARE_SDK_KCONFIG)"
+rsource "tfm/zephyr/Kconfig"

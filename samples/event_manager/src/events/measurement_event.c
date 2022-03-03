@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -13,8 +13,9 @@ static int log_measurement_event(const struct event_header *eh, char *buf,
 {
 	struct measurement_event *event = cast_measurement_event(eh);
 
-	return snprintf(buf, buf_len, "val1=%d val2=%d val3=%d", event->value1,
+	EVENT_MANAGER_LOG(eh, "val1=%d val2=%d val3=%d", event->value1,
 			event->value2, event->value3);
+	return 0;
 }
 
 static void profile_measurement_event(struct log_event_buf *buf,
@@ -23,9 +24,9 @@ static void profile_measurement_event(struct log_event_buf *buf,
 	struct measurement_event *event = cast_measurement_event(eh);
 
 	ARG_UNUSED(event);
-	profiler_log_encode_u32(buf, event->value1);
-	profiler_log_encode_u32(buf, event->value2);
-	profiler_log_encode_u32(buf, event->value3);
+	profiler_log_encode_int8(buf, event->value1);
+	profiler_log_encode_int16(buf, event->value2);
+	profiler_log_encode_int32(buf, event->value3);
 }
 
 EVENT_INFO_DEFINE(measurement_event,

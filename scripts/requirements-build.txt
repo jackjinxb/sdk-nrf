@@ -1,0 +1,5 @@
+ecdsa
+imagesize>=1.2.0
+intelhex
+pylint
+cddl-gen==0.3.0

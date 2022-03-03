@@ -1,52 +1,60 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr/types.h>
-#include <errno.h>
-#include <toolchain.h>
-#include <sys/util.h>
 #include <sys/printk.h>
-#include <nrf.h>
 #include <pm_config.h>
-#include <bl_validation.h>
-#include <bl_crypto.h>
 #include <fw_info.h>
 #include <fprotect.h>
-#include <provision.h>
-#ifdef CONFIG_UART_NRFX
-#ifdef CONFIG_UART_0_NRF_UART
-#include <hal/nrf_uart.h>
-#else
-#include <hal/nrf_uarte.h>
-#endif
-#endif
+#include <bl_storage.h>
+#include <bl_boot.h>
+#include <bl_validation.h>
+#include <nrfx_nvmc.h>
 
-static void uninit_used_peripherals(void)
+#if defined(CONFIG_HW_UNIQUE_KEY_LOAD)
+#include <init.h>
+#include <hw_unique_key.h>
+
+#define HUK_FLAG_OFFSET 0xFFC /* When this word is set, expect HUK to be written. */
+
+int load_huk(const struct device *unused)
 {
-#ifdef CONFIG_UART_0_NRF_UART
-	nrf_uart_disable(NRF_UART0);
-#elif defined(CONFIG_UART_0_NRF_UARTE)
-	nrf_uarte_disable(NRF_UARTE0);
-#elif defined(CONFIG_UART_1_NRF_UARTE)
-	nrf_uarte_disable(NRF_UARTE1);
-#elif defined(CONFIG_UART_2_NRF_UARTE)
-	nrf_uarte_disable(NRF_UARTE2);
-#endif
+	(void)unused;
+
+	if (!hw_unique_key_is_written(HUK_KEYSLOT_KDR)) {
+		uint32_t huk_flag_addr = PM_HW_UNIQUE_KEY_PARTITION_ADDRESS + HUK_FLAG_OFFSET;
+
+		if (*(uint32_t *)huk_flag_addr == 0xFFFFFFFF) {
+			printk("First boot, expecting app to write HUK.\n");
+			nrfx_nvmc_word_write(huk_flag_addr, 0);
+			return 0;
+		}
+		printk("Error: Hardware Unique Key not present.\n");
+		k_panic();
+		return -1;
+
+	}
+
+	hw_unique_key_load_kdr();
+
+	return 0;
 }
 
-#ifdef CONFIG_SW_VECTOR_RELAY
-extern u32_t _vector_table_pointer;
-#define VTOR _vector_table_pointer
-#else
-#define VTOR SCB->VTOR
+SYS_INIT(load_huk, PRE_KERNEL_2, 0);
 #endif
 
-static void boot_from(const struct fw_info *fw_info)
+
+static void validate_and_boot(const struct fw_info *fw_info, uint16_t slot)
 {
-	u32_t *vector_table = (u32_t *)fw_info->address;
+	printk("Attempting to boot slot %d.\r\n", slot);
+
+	if (fw_info == NULL) {
+		printk("No fw_info struct found.\r\n");
+		return;
+	}
 
 	printk("Attempting to boot from address 0x%x.\n\r",
 		fw_info->address);
@@ -58,95 +66,38 @@ static void boot_from(const struct fw_info *fw_info)
 		return;
 	}
 
-#if !(defined(CONFIG_SOC_NRF9160) || defined(CONFIG_SOC_NRF5340_CPUAPP))
-	/* Protect provision page after firmware is validated so invalidation
-	 * of public keys can be written directly into the page. Note that for
-	 * nRF91, the provision page is kept in OTP which does not need or
-	 * support protection.
-	 */
-	int err = fprotect_area(PM_PROVISION_ADDRESS, PM_PROVISION_SIZE);
+	printk("Firmware version %d\r\n", fw_info->version);
 
-	if (err) {
-		printk("Failed to protect B0 provision page.\n\r");
-		return;
-	}
-#endif
-
-#if CONFIG_ARCH_HAS_USERSPACE
-	__ASSERT(!(CONTROL_nPRIV_Msk & __get_CONTROL()),
-			"Not in Privileged mode");
-#endif
-
-	/* Allow any pending interrupts to be recognized */
-	__ISB();
-	__disable_irq();
-	NVIC_Type *nvic = NVIC;
-	/* Disable NVIC interrupts */
-	for (u8_t i = 0; i < ARRAY_SIZE(nvic->ICER); i++) {
-		nvic->ICER[i] = 0xFFFFFFFF;
-	}
-	/* Clear pending NVIC interrupts */
-	for (u8_t i = 0; i < ARRAY_SIZE(nvic->ICPR); i++) {
-		nvic->ICPR[i] = 0xFFFFFFFF;
+	if (fw_info->version > get_monotonic_version(NULL)) {
+		set_monotonic_version(fw_info->version, slot);
 	}
 
-	printk("Booting (0x%x).\r\n", fw_info->address);
-
-	uninit_used_peripherals();
-
-	SysTick->CTRL = 0;
-
-	/* Disable fault handlers used by the bootloader */
-	SCB->ICSR |= SCB_ICSR_PENDSTCLR_Msk;
-
-#ifndef CONFIG_CPU_CORTEX_M0
-	SCB->SHCSR &= ~(SCB_SHCSR_USGFAULTENA_Msk | SCB_SHCSR_BUSFAULTENA_Msk |
-			SCB_SHCSR_MEMFAULTENA_Msk);
-#endif
-
-	/* Activate the MSP if the core is found to currently run with the PSP */
-	if (CONTROL_SPSEL_Msk & __get_CONTROL()) {
-		__set_CONTROL(__get_CONTROL() & ~CONTROL_SPSEL_Msk);
-	}
-
-	__DSB(); /* Force Memory Write before continuing */
-	__ISB(); /* Flush and refill pipeline with updated permissions */
-
-	VTOR = fw_info->address;
-
-	if (!fw_info_ext_api_provide(fw_info, true)) {
-		return;
-	}
-
-	/* Set MSP to the new address and clear any information from PSP */
-	__set_MSP(vector_table[0]);
-	__set_PSP(0);
-
-	/* Call reset handler. */
-	((void (*)(void))vector_table[1])();
-	CODE_UNREACHABLE;
+	bl_boot(fw_info);
 }
+
+#define BOOT_SLOT_0 0
+#define BOOT_SLOT_1 1
 
 void main(void)
 {
-	int err = fprotect_area(PM_B0_IMAGE_ADDRESS, PM_B0_IMAGE_SIZE);
+	int err = fprotect_area(PM_B0_ADDRESS, PM_B0_SIZE);
 
 	if (err) {
 		printk("Failed to protect B0 flash, cancel startup.\n\r");
 		return;
 	}
 
-	u32_t s0_addr = s0_address_read();
-	u32_t s1_addr = s1_address_read();
+	uint32_t s0_addr = s0_address_read();
+	uint32_t s1_addr = s1_address_read();
 	const struct fw_info *s0_info = fw_info_find(s0_addr);
 	const struct fw_info *s1_info = fw_info_find(s1_addr);
 
 	if (!s1_info || (s0_info->version >= s1_info->version)) {
-		boot_from(s0_info);
-		boot_from(s1_info);
+		validate_and_boot(s0_info, BOOT_SLOT_0);
+		validate_and_boot(s1_info, BOOT_SLOT_1);
 	} else {
-		boot_from(s1_info);
-		boot_from(s0_info);
+		validate_and_boot(s1_info, BOOT_SLOT_1);
+		validate_and_boot(s0_info, BOOT_SLOT_0);
 	}
 
 	printk("No bootable image found. Aborting boot.\n\r");

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <ctype.h>
@@ -12,23 +12,34 @@
 #include <zephyr.h>
 #include <zephyr/types.h>
 
-#include <at_cmd_parser/at_cmd_parser.h>
+#include <modem/at_cmd_parser.h>
 #include "at_utils.h"
 
 #define AT_CMD_MAX_ARRAY_SIZE 32
+
+#define AT_CMD_CGEV_LEN         5
+#define AT_CMD_CPIN_LEN         5
+#define AT_CMD_SHORTSWVER_LEN   11
+#define AT_CMD_HWVERSION_LEN    10
+#define AT_CMD_XMODEMUUID_LEN   11
+#define AT_CMD_XICCID_LEN       7
 
 enum at_parser_state {
 	IDLE,
 	ARRAY,
 	STRING,
+	QUOTED_STRING,
 	NUMBER,
 	SMS_PDU,
 	NOTIFICATION,
 	COMMAND,
 	OPTIONAL,
+	CLAC,
 };
 
 static enum at_parser_state state;
+
+static bool set_type_string;
 
 static inline void set_new_state(enum at_parser_state new_state)
 {
@@ -38,6 +49,8 @@ static inline void set_new_state(enum at_parser_state new_state)
 static inline void reset_state(void)
 {
 	state = IDLE;
+
+	set_type_string = false;
 }
 
 static inline void skip_command_prefix(const char **cmd)
@@ -51,6 +64,42 @@ static inline void skip_command_prefix(const char **cmd)
 	(*cmd)++;
 }
 
+static inline bool check_response_for_forced_string(const char *tmpstr)
+{
+	bool retval = false;
+
+	if (!strncmp(tmpstr, "+CGEV", AT_CMD_CGEV_LEN) ||
+	    !strncmp(tmpstr, "+CPIN", AT_CMD_CPIN_LEN) ||
+	    !strncmp(tmpstr, "%SHORTSWVER", AT_CMD_SHORTSWVER_LEN) ||
+	    !strncmp(tmpstr, "%HWVERSION", AT_CMD_HWVERSION_LEN) ||
+	    !strncmp(tmpstr, "%XMODEMUUID", AT_CMD_XMODEMUUID_LEN) ||
+	    !strncmp(tmpstr, "%XICCID", AT_CMD_XICCID_LEN)) {
+			retval = true;
+	}
+
+	return retval;
+}
+
+static bool is_result(const char *str)
+{
+	int diff;
+	static const char * const toclip[] = {
+		"OK\r\n",
+		"ERROR\r\n",
+		"+CME ERROR",
+		"+CMS ERROR"
+	};
+
+	for (size_t i = 0; i < ARRAY_SIZE(toclip); i++) {
+		diff = strncmp(str, toclip[i], strlen(toclip[i]));
+		if (!diff) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
 static int at_parse_detect_type(const char **str, int index)
 {
 	const char *tmpstr = *str;
@@ -60,6 +109,19 @@ static int at_parse_detect_type(const char **str, int index)
 		 * notification ID, (eg +CEREG:)
 		 */
 		set_new_state(NOTIFICATION);
+
+		/* Check for responses we know need to be strings */
+		set_type_string = check_response_for_forced_string(tmpstr);
+
+	} else if (set_type_string) {
+		set_new_state(STRING);
+	} else if ((index > 0) && is_clac(tmpstr)) {
+		/* Next, check if we deal with CLAC response (eg AT+, AT%)
+		 * NOTE - need to go back to index 0 and parse as CLAC state
+		 * NOTE - AT+CLAC always returns more than one line
+		 */
+		set_new_state(CLAC);
+		return -2;
 	} else if ((index == 0) && is_command(tmpstr)) {
 		/* Next, check if we deal with command (eg AT+CCLK) */
 		set_new_state(COMMAND);
@@ -80,7 +142,7 @@ static int at_parse_detect_type(const char **str, int index)
 		set_new_state(NUMBER);
 
 	} else if (is_dblquote(*tmpstr)) {
-		set_new_state(STRING);
+		set_new_state(QUOTED_STRING);
 		tmpstr++;
 	} else if (is_array_start(*tmpstr)) {
 		set_new_state(ARRAY);
@@ -138,7 +200,7 @@ static int at_parse_process_element(const char **str, int index,
 
 		skip_command_prefix(&tmpstr);
 
-		while (is_valid_notification_char(*tmpstr)) {
+		while (is_valid_command_char(*tmpstr)) {
 			tmpstr++;
 		}
 
@@ -159,8 +221,18 @@ static int at_parse_process_element(const char **str, int index,
 	} else if (state == STRING) {
 		const char *start_ptr = tmpstr;
 
-		while (!is_dblquote(*tmpstr) && !is_terminated(*tmpstr) &&
-		       !is_lfcr(*tmpstr)) {
+		while (!is_lfcr(*tmpstr) && !is_terminated(*tmpstr)) {
+			tmpstr++;
+		}
+
+		at_params_string_put(list, index, start_ptr,
+				     tmpstr - start_ptr);
+
+		tmpstr++;
+	} else if (state == QUOTED_STRING) {
+		const char *start_ptr = tmpstr;
+
+		while (!is_dblquote(*tmpstr) && !is_terminated(*tmpstr)) {
 			tmpstr++;
 		}
 
@@ -171,15 +243,15 @@ static int at_parse_process_element(const char **str, int index,
 	} else if (state == ARRAY) {
 		char *next;
 		size_t i = 0;
-		u32_t tmparray[AT_CMD_MAX_ARRAY_SIZE];
+		uint32_t tmparray[AT_CMD_MAX_ARRAY_SIZE];
 
-		tmparray[i++] = (u32_t)strtoul(tmpstr, &next, 10);
+		tmparray[i++] = (uint32_t)strtoul(tmpstr, &next, 10);
 		tmpstr = next;
 
 		while (!is_array_stop(*tmpstr) && !is_terminated(*tmpstr)) {
 			if (is_separator(*tmpstr)) {
 				tmparray[i++] =
-					(u32_t)strtoul(++tmpstr, &next, 10);
+					(uint32_t)strtoul(++tmpstr, &next, 10);
 
 				if (strlen(tmpstr) == strlen(next)) {
 					break;
@@ -196,25 +268,29 @@ static int at_parse_process_element(const char **str, int index,
 			}
 		}
 
-		at_params_array_put(list, index, tmparray, i * sizeof(u32_t));
+		at_params_array_put(list, index, tmparray, i * sizeof(uint32_t));
 
 		tmpstr++;
 	} else if (state == NUMBER) {
 		char *next;
-		int value = (u32_t)strtoul(tmpstr, &next, 10);
+		int64_t value = (int64_t)strtoll(tmpstr, &next, 10);
 
 		tmpstr = next;
 
-		if (value <= USHRT_MAX) {
-			at_params_short_put(list, index, (u16_t)value);
-		} else {
-			at_params_int_put(list, index, value);
-		}
-
+		at_params_int_put(list, index, value);
 	} else if (state == SMS_PDU) {
 		const char *start_ptr = tmpstr;
 
 		while (isxdigit((int)*tmpstr)) {
+			tmpstr++;
+		}
+
+		at_params_string_put(list, index, start_ptr,
+				     tmpstr - start_ptr);
+	} else if (state == CLAC) {
+		const char *start_ptr = tmpstr;
+
+		while (!is_terminated(*tmpstr)) {
 			tmpstr++;
 		}
 
@@ -237,6 +313,7 @@ static int at_parse_param(const char **at_params_str,
 	int index = 0;
 	const char *str = *at_params_str;
 	bool oversized = false;
+	int ret;
 
 	reset_state();
 
@@ -245,8 +322,14 @@ static int at_parse_param(const char **at_params_str,
 			str++;
 		}
 
-		if (at_parse_detect_type(&str, index) == -1) {
+		ret = at_parse_detect_type(&str, index);
+		if (ret == -1) {
 			break;
+		}
+		if (ret == -2) {
+			/* CLAC response */
+			str = *at_params_str;
+			index = 0;
 		}
 
 		if (at_parse_process_element(&str, index, list) == -1) {
@@ -284,7 +367,8 @@ static int at_parse_param(const char **at_params_str,
 			while (is_lfcr(str[++i])) {
 			}
 
-			if (is_terminated(str[i]) || is_notification(str[i])) {
+			if (is_terminated(str[i]) || is_notification(str[i]) ||
+			    is_result(str + i)) {
 				str += i;
 				break;
 			}
@@ -303,7 +387,7 @@ static int at_parse_param(const char **at_params_str,
 		return -E2BIG;
 	}
 
-	if (!is_terminated(*str)) {
+	if (!is_terminated(*str) && !is_result(str)) {
 		return -EAGAIN;
 	}
 

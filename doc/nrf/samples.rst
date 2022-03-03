@@ -3,50 +3,33 @@
 Samples
 #######
 
-For very simple samples, see the :ref:`zephyr:basic-sample` in Zephyr.
+The |NCS| provides samples that specifically target Nordic Semiconductor devices and show how to implement typical use cases with Nordic Semiconductor libraries and drivers.
+
+Samples showcase a single feature or library, while :ref:`applications` include a variety of libraries to implement a specific use case.
+
+Zephyr also provides a variety of application samples and demos.
+Documentation for those is available in Zephyr's :ref:`zephyr:samples-and-demos` section.
+For very simple samples, see the :ref:`zephyr:basic-sample`.
 Those samples are a good starting point for understanding how to put together your own application.
 
-In addition, the |NCS| provides the following samples that showcase the use of a single feature or library:
-
-.. _ble_samples:
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Bluetooth samples:
-   :glob:
-
-   ../../samples/bluetooth/*/README
-   ../../samples/bluetooth/mesh/*/README
-
 .. note::
-   |noBLE|
+   All samples in the |NCS| use :ref:`lib_fatal_error` library and are configured to perform a system reset if a fatal error occurs.
+   This behavior is different from how fatal errors are handled in the Zephyr samples.
+   You can change the default behavior by updating the configuration option :kconfig:`CONFIG_RESET_ON_FATAL_ERROR`.
 
 .. toctree::
    :maxdepth: 1
-   :caption: NFC samples:
    :glob:
+   :caption: Subpages:
 
-   ../../samples/nfc/*/README
-
-.. _nrf9160_samples:
-
-.. toctree::
-   :maxdepth: 1
-   :caption: nRF9160 samples:
-   :glob:
-
-   ../../samples/nrf9160/*/README
-
-.. toctree::
-   :maxdepth: 1
-   :caption: Other samples:
-   :glob:
-
-   ../../samples/*/README
-   ../../samples/debug/*/README
-   ../../samples/mpsl/*/README
-   ../../samples/peripheral/*/README
-   ../../samples/sensor/*/README
-   ../../samples/usb/*/README
-
-For more complex examples, see :ref:`applications`.
+   samples/samples_bl.rst
+   samples/samples_crypto.rst
+   samples/samples_edge.rst
+   samples/samples_gazell.rst
+   samples/samples_matter.rst
+   samples/samples_nfc.rst
+   samples/samples_nrf5340.rst
+   samples/samples_nrf9160.rst
+   samples/samples_thread.rst
+   samples/samples_zigbee.rst
+   samples/samples_other.rst

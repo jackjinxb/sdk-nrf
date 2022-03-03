@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _ORDER_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {

@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2018 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 # Find out which flash protection should be used
@@ -17,3 +17,4 @@ endif()
 
 zephyr_library()
 zephyr_library_sources(${FPROTECT_SRC})
+zephyr_library_sources_ifdef(CONFIG_FPROTECT_APP sys_init_fprotect.c)

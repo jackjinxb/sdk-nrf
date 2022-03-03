@@ -1,7 +1,7 @@
 #
 # Copyright (c) 2018 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menuconfig SECURE_BOOT_CRYPTO
@@ -33,7 +33,7 @@ config SB_HASH_LEN
 
 choice SB_CRYPTO_SIG
 	prompt "Firmware verification Algorithm"
-	default SB_CRYPTO_NO_ECDSA_SECP256R1 if !IS_SECURE_BOOTLOADER
+	default SB_CRYPTO_NO_ECDSA_SECP256R1 if !IS_SECURE_BOOTLOADER || SB_VALIDATE_FW_HASH
 	default SB_CRYPTO_CC310_ECDSA_SECP256R1 if HAS_HW_NRF_CC310
 	default SB_CRYPTO_OBERON_ECDSA_SECP256R1
 	help

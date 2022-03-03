@@ -1,17 +1,19 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stddef.h>
+
+#include "common_test.h"
+
 #include <sys/byteorder.h>
 #include <logging/log.h>
 
-#include "common_test.h"
 #include <mbedtls/ecdh.h>
 
 /* Setting LOG_LEVEL_DBG might affect time measurements! */
@@ -40,6 +42,56 @@ static uint8_t m_ecdh_expected_ss_buf[ECDH_BUF_SIZE];
 static test_vector_ecdh_t *p_test_vector;
 static size_t expected_ss_len;
 
+void ecdh_clear_buffers(void);
+void unhexify_ecdh(void);
+
+static int curve25519_ctx_fixup(mbedtls_ecdh_context *ctx)
+{
+	/* Set certain bits to predefined values */
+	int err_code = mbedtls_mpi_set_bit(&ctx->d, 0, 0);
+
+	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
+	err_code |= mbedtls_mpi_set_bit(&ctx->d, 1, 0);
+	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
+	err_code |= mbedtls_mpi_set_bit(&ctx->d, 2, 0);
+	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
+	err_code |= mbedtls_mpi_set_bit(&ctx->d, 254, 1);
+	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
+	err_code |= mbedtls_mpi_set_bit(&ctx->d, 255, 0);
+	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
+
+	mbedtls_mpi_lset(&ctx->Q.Z, 1);
+
+	return err_code;
+}
+
+static void ecdh_setup_random(void)
+{
+	ecdh_clear_buffers();
+	static int i;
+	p_test_vector =
+		ITEM_GET(test_vector_ecdh_data_random, test_vector_ecdh_t, i++);
+	unhexify_ecdh();
+}
+
+static void ecdh_setup_deterministic_simple(void)
+{
+	ecdh_clear_buffers();
+	static int i;
+	p_test_vector = ITEM_GET(test_vector_ecdh_data_deterministic_simple,
+				 test_vector_ecdh_t, i++);
+	unhexify_ecdh();
+}
+
+static void ecdh_setup_deterministic_full(void)
+{
+	ecdh_clear_buffers();
+	static int i;
+	p_test_vector = ITEM_GET(test_vector_ecdh_data_deterministic_full,
+				 test_vector_ecdh_t, i++);
+	unhexify_ecdh();
+}
+
 void ecdh_clear_buffers(void)
 {
 	memset(m_ecdh_initiater_priv_key_buf, 0x00,
@@ -55,40 +107,13 @@ void ecdh_clear_buffers(void)
 	memset(m_ecdh_expected_ss_buf, 0x00, sizeof(m_ecdh_expected_ss_buf));
 }
 
-__attribute__((noinline)) static void unhexify_ecdh(void)
+__attribute__((noinline)) void unhexify_ecdh(void)
 {
-	expected_ss_len =
-		hex2bin(p_test_vector->p_expected_shared_secret,
-			strlen(p_test_vector->p_expected_shared_secret),
-			m_ecdh_expected_ss_buf,
-			strlen(p_test_vector->p_expected_shared_secret));
-}
 
-void ecdh_setup_random(void)
-{
-	ecdh_clear_buffers();
-	static int i;
-	p_test_vector =
-		ITEM_GET(test_vector_ecdh_data_random, test_vector_ecdh_t, i++);
-	unhexify_ecdh();
-}
+	expected_ss_len = hex2bin_safe(p_test_vector->p_expected_shared_secret,
+				       m_ecdh_expected_ss_buf,
+				       sizeof(m_ecdh_expected_ss_buf));
 
-void ecdh_setup_deterministic_simple(void)
-{
-	ecdh_clear_buffers();
-	static int i;
-	p_test_vector = ITEM_GET(test_vector_ecdh_data_deterministic_simple,
-				 test_vector_ecdh_t, i++);
-	unhexify_ecdh();
-}
-
-void ecdh_setup_deterministic_full(void)
-{
-	ecdh_clear_buffers();
-	static int i;
-	p_test_vector = ITEM_GET(test_vector_ecdh_data_deterministic_full,
-				 test_vector_ecdh_t, i++);
-	unhexify_ecdh();
 }
 
 /**@brief Function for executing ECDH for initiator and repsonder by
@@ -116,23 +141,23 @@ void exec_test_case_ecdh_random(void)
 	err_code_initiator =
 		mbedtls_ecdh_gen_public(&initiator_ctx.grp, &initiator_ctx.d,
 					&initiator_ctx.Q,
-					mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+					drbg_random, &drbg_ctx);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code_initiator);
 
 	err_code_responder =
 		mbedtls_ecdh_gen_public(&responder_ctx.grp, &responder_ctx.d,
 					&responder_ctx.Q,
-					mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+					drbg_random, &drbg_ctx);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code_responder);
 
 	start_time_measurement();
 
 	err_code_initiator = mbedtls_ecdh_compute_shared(
 		&initiator_ctx.grp, &initiator_ctx.z, &responder_ctx.Q,
-		&initiator_ctx.d, mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+		&initiator_ctx.d, drbg_random, &drbg_ctx);
 	err_code_responder = mbedtls_ecdh_compute_shared(
 		&responder_ctx.grp, &responder_ctx.z, &initiator_ctx.Q,
-		&responder_ctx.d, mbedtls_ctr_drbg_random, &ctr_drbg_ctx);
+		&responder_ctx.d, drbg_random, &drbg_ctx);
 
 	stop_time_measurement();
 
@@ -151,26 +176,6 @@ void exec_test_case_ecdh_random(void)
 
 	mbedtls_ecdh_free(&initiator_ctx);
 	mbedtls_ecdh_free(&responder_ctx);
-}
-
-static int curve25519_ctx_fixup(mbedtls_ecdh_context *ctx)
-{
-	/* Set certain bits to predefined values */
-	int err_code = mbedtls_mpi_set_bit(&ctx->d, 0, 0);
-
-	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
-	err_code |= mbedtls_mpi_set_bit(&ctx->d, 1, 0);
-	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
-	err_code |= mbedtls_mpi_set_bit(&ctx->d, 2, 0);
-	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
-	err_code |= mbedtls_mpi_set_bit(&ctx->d, 254, 1);
-	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
-	err_code |= mbedtls_mpi_set_bit(&ctx->d, 255, 0);
-	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
-
-	mbedtls_mpi_lset(&ctx->Q.Z, 1);
-
-	return err_code;
 }
 
 /**@brief Function for executing deterministic ECDH for initiator and responder.
@@ -264,17 +269,23 @@ void exec_test_case_ecdh_deterministic_full(void)
 	}
 
 	expected_ss_len =
-		hex2bin(p_test_vector->p_expected_shared_secret,
-			strlen(p_test_vector->p_expected_shared_secret),
-			m_ecdh_expected_ss_buf,
-			strlen(p_test_vector->p_expected_shared_secret));
+		hex2bin_safe(p_test_vector->p_expected_shared_secret,
+			     m_ecdh_expected_ss_buf,
+			     sizeof(m_ecdh_expected_ss_buf));
 
 	/* Execute ECDH on initiator side. */
 	start_time_measurement();
-	err_code =
-		mbedtls_ecdh_compute_shared(&initiator_ctx.grp,
-					    &initiator_ctx.z, &responder_ctx.Q,
-					    &initiator_ctx.d, NULL, NULL);
+	err_code = mbedtls_ecdh_compute_shared(
+			&initiator_ctx.grp,
+			&initiator_ctx.z,
+			&responder_ctx.Q,
+			&initiator_ctx.d,
+#if defined(CONFIG_MBEDTLS_VANILLA_BACKEND)
+			NULL,
+#else
+			drbg_random,
+#endif
+			NULL);
 	stop_time_measurement();
 
 	LOG_DBG("Error code compute shared: -0x%04X", -err_code);
@@ -287,10 +298,17 @@ void exec_test_case_ecdh_deterministic_full(void)
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
 	/* Execute ECDH on responder side. */
-	err_code =
-		mbedtls_ecdh_compute_shared(&responder_ctx.grp,
-					    &responder_ctx.z, &initiator_ctx.Q,
-					    &responder_ctx.d, NULL, NULL);
+	err_code = mbedtls_ecdh_compute_shared(
+			&responder_ctx.grp,
+			&responder_ctx.z,
+			&initiator_ctx.Q,
+			&responder_ctx.d,
+#if defined(CONFIG_MBEDTLS_VANILLA_BACKEND)
+			NULL,
+#else
+			drbg_random,
+#endif
+			NULL);
 
 	TEST_VECTOR_ASSERT_EQUAL(p_test_vector->expected_err_code, err_code);
 
@@ -365,10 +383,17 @@ void exec_test_case_ecdh_deterministic(void)
 	}
 
 	start_time_measurement();
-	err_code =
-		mbedtls_ecdh_compute_shared(&responder_ctx.grp,
-					    &responder_ctx.z, &initiator_ctx.Q,
-					    &responder_ctx.d, NULL, NULL);
+	err_code = mbedtls_ecdh_compute_shared(
+			&responder_ctx.grp,
+			&responder_ctx.z,
+			&initiator_ctx.Q,
+			&responder_ctx.d,
+#if defined(CONFIG_MBEDTLS_VANILLA_BACKEND)
+			NULL,
+#else
+			drbg_random,
+#endif
+			NULL);
 	stop_time_measurement();
 
 	LOG_DBG("Error code ss computation: -0x%04X", -err_code);

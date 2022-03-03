@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -13,7 +13,8 @@ static int log_motion_event(const struct event_header *eh, char *buf,
 {
 	const struct motion_event *event = cast_motion_event(eh);
 
-	return snprintf(buf, buf_len, "dx=%d, dy=%d", event->dx, event->dy);
+	EVENT_MANAGER_LOG(eh, "dx=%d, dy=%d", event->dx, event->dy);
+	return 0;
 }
 
 static void profile_motion_event(struct log_event_buf *buf,
@@ -21,13 +22,13 @@ static void profile_motion_event(struct log_event_buf *buf,
 {
 	const struct motion_event *event = cast_motion_event(eh);
 
-	profiler_log_encode_u32(buf, event->dx);
-	profiler_log_encode_u32(buf, event->dy);
+	profiler_log_encode_int16(buf, event->dx);
+	profiler_log_encode_int16(buf, event->dy);
 }
 
 
 EVENT_INFO_DEFINE(motion_event,
-		  ENCODE(PROFILER_ARG_S32, PROFILER_ARG_S32),
+		  ENCODE(PROFILER_ARG_S16, PROFILER_ARG_S16),
 		  ENCODE("dx", "dy"),
 		  profile_motion_event);
 

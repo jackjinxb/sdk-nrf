@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/enocean.h>
@@ -9,8 +9,8 @@
 #include <dk_buttons_and_leds.h>
 
 static void enocean_button(struct bt_enocean_device *device,
-			   enum bt_enocean_button_action action, u8_t changed,
-			   const u8_t *opt_data, size_t opt_data_len)
+			   enum bt_enocean_button_action action, uint8_t changed,
+			   const uint8_t *opt_data, size_t opt_data_len)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
@@ -36,12 +36,12 @@ static void enocean_button(struct bt_enocean_device *device,
 
 static void enocean_sensor(struct bt_enocean_device *device,
 			   const struct bt_enocean_sensor_data *data,
-			   const u8_t *opt_data, size_t opt_data_len)
+			   const uint8_t *opt_data, size_t opt_data_len)
 {
 	char addr[BT_ADDR_LE_STR_LEN];
 
 	dk_set_leds_state(DK_LED1_MSK | DK_LED2_MSK, 0);
-	k_sleep(50);
+	k_sleep(K_MSEC(50));
 	dk_set_leds_state(0, DK_LED1_MSK | DK_LED2_MSK);
 
 	bt_addr_le_to_str(&device->addr, addr, sizeof(addr));
@@ -79,9 +79,9 @@ static void enocean_commissioned(struct bt_enocean_device *device)
 
 	for (int i = 0; i < 4; ++i) {
 		dk_set_leds_state(DK_LED1_MSK | DK_LED2_MSK, 0);
-		k_sleep(100);
+		k_sleep(K_MSEC(100));
 		dk_set_leds_state(0, DK_LED1_MSK | DK_LED2_MSK);
-		k_sleep(100);
+		k_sleep(K_MSEC(100));
 	}
 }
 

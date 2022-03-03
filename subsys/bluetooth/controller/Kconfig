@@ -1,10 +1,41 @@
 #
 # Copyright (c) 2019 - 2020 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
-menu "Nordic BLE controller"
+choice BT_LL_CHOICE
+	prompt "Bluetooth Link Layer Selection"
+	default BT_LL_SOFTDEVICE
+
+config BT_LL_SOFTDEVICE
+	bool "SoftDevice Link Layer"
+	select MPSL
+	select ZERO_LATENCY_IRQS
+	select BT_CTLR_LE_ENC_SUPPORT
+	select BT_CTLR_EXT_REJ_IND_SUPPORT
+	select BT_CTLR_PRIVACY_SUPPORT
+	select BT_CTLR_EXT_SCAN_FP_SUPPORT
+	select BT_CTLR_PHY_UPDATE_SUPPORT
+	select BT_CTLR_CHAN_SEL_2_SUPPORT
+	select BT_CTLR_CONN_RSSI_SUPPORT
+	select BT_CTLR_DATA_LEN_UPDATE_SUPPORT
+	select BT_CTLR_ADV_EXT_SUPPORT
+	select BT_CTLR_ADV_PERIODIC_SUPPORT
+	select BT_CTLR_SYNC_PERIODIC_SUPPORT
+	select BT_CTLR_PHY_2M_SUPPORT if HAS_HW_NRF_RADIO_BLE_2M
+	select BT_CTLR_PHY_CODED_SUPPORT if HAS_HW_NRF_RADIO_BLE_CODED
+	select BT_HAS_HCI_VS
+	# The SoftDevice Controller only supports nRF52 and nRF53, it does not support nRF51
+	# or nRF91 (nRF91 doesn't even have the physical HW needed for BLE).
+	depends on (SOC_SERIES_NRF52X || SOC_NRF5340_CPUNET)
+	help
+	  Use SoftDevice Link Layer implementation.
+
+endchoice
+
+if BT_LL_SOFTDEVICE
+menu "SoftDevice Controller"
 
 # BT_HCI_TX_STACK_SIZE is declared in Zephyr and also here for a second time,
 # for set the valid default size of the HCI Tx stack.
@@ -12,7 +43,7 @@ config BT_HCI_TX_STACK_SIZE
 	# NOTE: This value is derived from other symbols and should only be
 	# changed if required by architecture
 	int
-	default 1536 if (BT_LL_NRFXLIB && BT_PERIPHERAL)
+	default 1536 if BT_LL_SOFTDEVICE
 	help
 	  Stack size needed for executing bt_send with specified driver.
 	  NOTE: This is an advanced setting and should not be changed unless
@@ -38,12 +69,19 @@ config BT_RX_STACK_SIZE
 
 # SYSTEM_WORKQUEUE_STACK_SIZE is declared in Zephyr and also here for a second
 # time, because Central side Bluetooth sample needs a different workqueue size
-# when Nordic BLE controller is used.
+# when the SoftDevice Controller is used.
 config SYSTEM_WORKQUEUE_STACK_SIZE
 	int
-	default 2048 if (BT_LL_NRFXLIB && BT_CENTRAL)
+	default 2048 if BT_LL_SOFTDEVICE
 
-config BLECTRL_SLAVE_COUNT
+config BT_CTLR_SDC_LLPM
+	bool "Enable Low Latency Packet Mode support"
+	depends on SOC_SERIES_NRF52X
+	help
+	  Low Latency Packet Mode (LLPM) is a Nordic proprietary addition
+	  which lets the application use connection intervals down to 1 ms.
+
+config BT_CTLR_SDC_PERIPHERAL_COUNT
 	int "Number of concurrent slave roles"
 	default BT_MAX_CONN if (BT_PERIPHERAL && !BT_CENTRAL)
 	default 1 if BT_PERIPHERAL
@@ -53,9 +91,9 @@ config BLECTRL_SLAVE_COUNT
 	  Number of concurrent slave roles defines how many simultaneous
 	  connections can be created with the device working as a slave.
 	  NOTE: the number of master roles is defined as
-	  BT_MAX_CONN - BLECTRL_SLAVE_COUNT
+	  BT_MAX_CONN - BT_CTLR_SDC_PERIPHERAL_COUNT
 
-config BLECTRL_MAX_CONN_EVENT_LEN_DEFAULT
+config BT_CTLR_SDC_MAX_CONN_EVENT_LEN_DEFAULT
 	int "Default max connection event length [us]"
 	default 7500
 	range 2500 4000000
@@ -64,27 +102,86 @@ config BLECTRL_MAX_CONN_EVENT_LEN_DEFAULT
 	  microseconds. The event length and the connection interval are the
 	  primary parameters for setting the throughput of a connection.
 
+config BT_CTLR_SDC_SCAN_BUFFER_COUNT
+	int "Number of buffers available in the scanner"
+	default 3
+	range 2 20
+	help
+	  The buffers are used for processing incoming packets
+	  and storing advertising reports.
+	  It is recommended to support at least three buffers,
+	  otherwise the scan response report will likely not be generated.
 
-config BLECTLR_PRIO
-	# Hidden option to set the priority of the controller threads
+config BT_CTLR_SDC_PERIODIC_SYNC_BUFFER_COUNT
+	int "Number of periodic synchronization receive buffers"
+	default 2
+	range 2 10
+	help
+	  The buffers are used for processing incoming packets
+	  and storing periodic advertising reports.
+
+# CONFIG_BT_CTLR_SYNC_PERIODIC_ADV_LIST_SIZE is declared in Zephyr and also
+# here for a second time, to set different range for the SoftDevice Controller.
+config BT_CTLR_SYNC_PERIODIC_ADV_LIST_SIZE
+	int "LE Periodic Advertiser List size"
+	range 0 8
+	default 0
+	depends on BT_CTLR_SYNC_PERIODIC_ADV_LIST
+	help
+	  Set Periodic Advertiser List size, this will be return in the HCI LE
+	  Read Periodic Advertiser List Command.
+
+config BT_CTLR_SDC_RX_PRIO
+	# Hidden option to set the priority of the controller receive thread
 	int
-	default BT_RX_PRIO if BT_HCI_HOST || BT_RECV_IS_RX_THREAD
-	default 8
+	default BT_DRIVER_RX_HIGH_PRIO
 
-config BLECTLR_RX_STACK_SIZE
+config BT_CTLR_SDC_RX_STACK_SIZE
 	int "Size of the receive thread stack"
 	default 1024
 	help
 	  Size of the receiving thread stack, used to retrieve HCI events and
 	  data from the controller.
 
-# The BLE controller library variants are defined in nrfxlib, here we redefine
-# the choice to 'import' them, so they appear in the same menu as the rest.
+choice BT_LL_SOFTDEVICE_VARIANT
+	prompt "SoftDevice Controller variant"
+	default BT_LL_SOFTDEVICE_MULTIROLE if ((BT_OBSERVER && BT_BROADCASTER) || \
+						     BT_CTLR_SDC_LLPM || \
+						     BT_CTLR_ADV_EXT || \
+						     BT_CTLR_PHY_CODED || \
+						     BT_CTLR_ADV_PERIODIC || \
+						     MPSL_CX_BT_1WIRE || \
+						     MPSL_CX_BT_3WIRE || \
+						     BT_CTLR_SYNC_PERIODIC || \
+						     SOC_NRF5340_CPUNET)
+	default BT_LL_SOFTDEVICE_CENTRAL if BT_OBSERVER
+	default BT_LL_SOFTDEVICE_PERIPHERAL if BT_BROADCASTER
+	help
+	  Select a SoftDevice Controller variant.
 
-choice BLE_CONTROLLER_VARIANT
-	prompt "BLE Controller variant"
-	bool
+config BT_LL_SOFTDEVICE_PERIPHERAL
+	bool "SoftDevice Controller peripheral library optimized for peripheral role applications"
+	depends on !BT_OBSERVER && !BT_CTLR_SDC_LLPM && !BT_CTLR_ADV_EXT && !BT_CTLR_PHY_CODED
+	help
+	  The peripheral library variant is optimized for simpler applications only
+	  requiring the peripheral role.
+
+config BT_LL_SOFTDEVICE_CENTRAL
+	bool "SoftDevice Controller optimized for central role applications"
+	depends on !BT_BROADCASTER && !BT_CTLR_SDC_LLPM && !BT_CTLR_ADV_EXT && !BT_CTLR_PHY_CODED
+	help
+	  The central library variant is optimized for simpler applications only
+	  requiring the central role.
+
+config BT_LL_SOFTDEVICE_MULTIROLE
+	bool "SoftDevice Controller optimized for multirole and other advanced configurations"
+	help
+	  The multirole library variant is contains all supported features and can be used
+	  for more advanced applications. Using this library may give slightly larger applications.
+	  However, the library is designed in such a way that unused functionality is removed
+	  by the linker.
 
 endchoice
 
 endmenu
+endif  # BT_LL_SOFTDEVICE

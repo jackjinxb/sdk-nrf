@@ -1,36 +1,36 @@
 #
 # Copyright (c) 2019 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
-
-function(add_overlay_config image overlay_file)
-  set(old_conf ${${image}OVERLAY_CONFIG})
-  string(FIND "${old_conf}" "${overlay_file}" found)
-  if (${found} EQUAL -1)
-    set(${image}OVERLAY_CONFIG
-      "${old_conf} ${overlay_file}"
-      CACHE STRING "" FORCE)
-  endif()
-endfunction()
 
 # This CMakeLists.txt is executed by the root application only when
 # B0 (SECURE_BOOT) is enabled. First, figure out what image will be
 # booted by B0, and set the required properties for that image to be
 # bootable by B0.
 
+if (CONFIG_NCS_IS_VARIANT_IMAGE)
+  # When building the a variant of an image, the configuration of the variant image
+  # is identical to the base image, except 'CONFIG_NCS_IS_VARIANT_IMAGE'. This file is
+  # included if 'CONFIG_SECURE_BOOT' is set, which can be the case for the base
+  # image. However, the logic in this file should only be performed once, for
+  # the base image, not for the variant variant. Hence, we have this check to avoid
+  # execution of this file for the variant image.
+    return()
+endif()
+
 if (CONFIG_BOOTLOADER_MCUBOOT)
-  set(image_to_boot mcuboot_)
+  set(image_to_boot mcuboot)
 
   add_overlay_config(
-    mcuboot_
+    mcuboot
     ${CMAKE_CURRENT_SOURCE_DIR}/multi_image_mcuboot.conf
     )
 
 else()
 
   if (CONFIG_SPM)
-    set(image_to_boot spm_)
+    set(image_to_boot spm)
   endif()
 endif()
 
@@ -45,39 +45,51 @@ else()
   assert(CONFIG_FW_INFO "CONFIG_FW_INFO must be set")
 endif()
 
-if (DEFINED CONFIG_SOC_NRF9160)
-  # Override PM_PROVISION_ADDRESS since Partition Manager cannot yet place
-  # partitions in OTP.
-  set(otp_start_addr "0xff8108")
-  set(provision_addr ${otp_start_addr})
-elseif (DEFINED CONFIG_SOC_NRF5340_CPUAPP)
-  # Override PM_PROVISION_ADDRESS since Partition Manager cannot yet place
-  # partitions in OTP.
-  set(otp_start_addr "0xff8100")
-  set(provision_addr ${otp_start_addr})
-else ()
-  set(provision_addr "$<TARGET_PROPERTY:partition_manager,PM_PROVISION_ADDRESS>")
+if (DEFINED CONFIG_SB_MONOTONIC_COUNTER)
+  set(monotonic_counter_arg
+    --num-counter-slots-version ${CONFIG_SB_NUM_VER_COUNTER_SLOTS})
 endif()
 
-# Build and include hex file with provision data about the image to be booted.
+# Build and include hex file containing provisioned data for the bootloader.
 set(NRF_SCRIPTS            ${NRF_DIR}/scripts)
 set(NRF_BOOTLOADER_SCRIPTS ${NRF_SCRIPTS}/bootloader)
 set(PROVISION_HEX_NAME     provision.hex)
 set(PROVISION_HEX          ${PROJECT_BINARY_DIR}/${PROVISION_HEX_NAME})
 
-include(${CMAKE_CURRENT_LIST_DIR}/../cmake/debug_keys.cmake)
-include(${CMAKE_CURRENT_LIST_DIR}/../cmake/sign.cmake)
+# Skip signing if MCUBoot is to be booted and its not built from source
+if ((CONFIG_SB_VALIDATE_FW_SIGNATURE OR CONFIG_SB_VALIDATE_FW_HASH) AND
+    NOT (CONFIG_BOOTLOADER_MCUBOOT AND NOT CONFIG_MCUBOOT_BUILD_STRATEGY_FROM_SOURCE))
 
-if (${CONFIG_SB_DEBUG_SIGNATURE_PUBLIC_KEY_LAST})
-  set(ALL_PUBLIC_KEY_FILES "${PUBLIC_KEY_FILES},${SIGNATURE_PUBLIC_KEY_FILE}")
-  message(WARNING
-    "
+  include(${CMAKE_CURRENT_LIST_DIR}/../cmake/debug_keys.cmake)
+  include(${CMAKE_CURRENT_LIST_DIR}/../cmake/sign.cmake)
+
+  if (${CONFIG_SB_DEBUG_SIGNATURE_PUBLIC_KEY_LAST})
+    set(public_keys_file_arg
+      --public-key-files "${PUBLIC_KEY_FILES},${SIGNATURE_PUBLIC_KEY_FILE}"
+      )
+    message(WARNING
+      "
       -----------------------------------------------------------------
       --- WARNING: SB_DEBUG_SIGNATURE_PUBLIC_KEY_LAST is enabled.   ---
       --- This config should only be enabled for testing/debugging. ---
       -----------------------------------------------------------------")
+    else()
+      set(public_keys_file_arg
+        --public-key-files "${SIGNATURE_PUBLIC_KEY_FILE},${PUBLIC_KEY_FILES}"
+        )
+    endif()
+  set(PROVISION_DEPENDS signature_public_key_file_target)
+endif()
+
+if (CONFIG_SOC_NRF5340_CPUNET)
+  set(s0_arg --s0-addr $<TARGET_PROPERTY:partition_manager,PM_APP_ADDRESS>)
 else()
-  set(ALL_PUBLIC_KEY_FILES "${SIGNATURE_PUBLIC_KEY_FILE},${PUBLIC_KEY_FILES}")
+  set(s0_arg --s0-addr $<TARGET_PROPERTY:partition_manager,PM_S0_ADDRESS>)
+  set(s1_arg --s1-addr $<TARGET_PROPERTY:partition_manager,PM_S1_ADDRESS>)
+endif()
+
+if (CONFIG_SB_DEBUG_NO_VERIFY_HASHES)
+  set(no_verify_hashes_arg --no-verify-hashes)
 endif()
 
 add_custom_command(
@@ -86,17 +98,20 @@ add_custom_command(
   COMMAND
   ${PYTHON_EXECUTABLE}
   ${NRF_BOOTLOADER_SCRIPTS}/provision.py
-  --s0-addr $<TARGET_PROPERTY:partition_manager,PM_S0_ADDRESS>
-  --s1-addr $<TARGET_PROPERTY:partition_manager,PM_S1_ADDRESS>
-  --provision-addr ${provision_addr}
-  --public-key-files ${ALL_PUBLIC_KEY_FILES}
+  ${s0_arg}
+  ${s1_arg}
+  --provision-addr $<TARGET_PROPERTY:partition_manager,PM_PROVISION_ADDRESS>
+  ${public_keys_file_arg}
   --output ${PROVISION_HEX}
+  ${monotonic_counter_arg}
+  --max-size ${CONFIG_PM_PARTITION_SIZE_PROVISION}
+  ${no_verify_hashes_arg}
   DEPENDS
   ${PROVISION_KEY_DEPENDS}
   WORKING_DIRECTORY
   ${PROJECT_BINARY_DIR}
   COMMENT
-  "Creating provision data for Bootloader, storing to ${PROVISION_HEX_NAME}"
+  "Creating data to be provisioned to the Bootloader, storing to ${PROVISION_HEX_NAME}"
   USES_TERMINAL
   )
 
@@ -104,7 +119,7 @@ add_custom_target(
   provision_target
   DEPENDS
   ${PROVISION_HEX}
-  signature_public_key_file_target
+  ${PROVISION_DEPENDS}
   )
 
 get_property(

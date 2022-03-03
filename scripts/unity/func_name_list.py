@@ -2,7 +2,7 @@
 #
 # Copyright (c) 2019 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 import re
 import argparse
@@ -14,7 +14,8 @@ def func_names_from_header(in_file, out_file):
 
     with open(out_file, 'w') as f_out:
         # Regex match all function names in the header file
-        x = re.findall(r"^\s*(?:\w+[*\s]+)+(\w+?)\(.*?\);",
+        # Tests for validating the regex in tests/unity/wrap
+        x = re.findall(r"^\s*(?:\w+[*\s]+)+(\w+?)\s*\([\w\s,*\.\[\]]*?\)\s*;",
                        content, re.M | re.S)
         for item in x:
             f_out.write(item + "\n")

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _BATTERY_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -49,7 +50,7 @@ EVENT_TYPE_DECLARE(battery_state_event);
 struct battery_level_event {
 	struct event_header header;
 
-	u8_t level;
+	uint8_t level;
 };
 
 EVENT_TYPE_DECLARE(battery_level_event);
@@ -57,5 +58,7 @@ EVENT_TYPE_DECLARE(battery_level_event);
 #ifdef __cplusplus
 }
 #endif
+
+/** @} */
 
 #endif /* _BATTERY_EVENT_H_ */

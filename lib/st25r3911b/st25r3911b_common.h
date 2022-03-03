@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef ST25R3911B_H_
@@ -48,13 +48,18 @@ extern "C" {
 /** FC in 4096/fc. */
 #define NFC_1FC_IN_4096FC 4096
 
-/** ST25R3911B NFCF LED pin. */
-#define ST25R3911B_NFCF_LED 4
-/** ST25R3911B NFCB LED pin. */
-#define ST25R3911B_NFCB_LED 28
-/** ST25R3911B NFCA LED pin. */
-#define ST25R3911B_NFCA_LED 29
+/** ST25R3911B on shield the NFC technology indication LEDs.
+ */
+enum st25r3911b_leds {
+	/** ST25R3911B NFCA LED ID. */
+	ST25R3911B_NFCA_LED,
 
+	/** ST25R3911B NFCB LED ID. */
+	ST25R3911B_NFCB_LED,
+
+	/** ST25R3911B NFCF LED ID. */
+	ST25R3911B_NFCF_LED
+};
 
 /** Conversion fc to 64/fc. The timer register can be set
  *  using the following formula: <tt>register value * 64fc</tt>
@@ -87,7 +92,7 @@ int st25r3911b_init(void);
  *  @retval 0  If the operation was successful.
  *             Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_tx_len_set(u16_t len);
+int st25r3911b_tx_len_set(uint16_t len);
 
 /** @brief Set NFC Reader No-Response timer.
  *
@@ -118,7 +123,7 @@ int st25r3911b_tx_len_set(u16_t len);
  *  @retval 0 If the operation was successful.
  *            Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_non_response_timer_set(u16_t fc, bool long_range, bool emv);
+int st25r3911b_non_response_timer_set(uint16_t fc, bool long_range, bool emv);
 
 /** Set NFC Reader Mask Receive timer.
  *
@@ -134,7 +139,7 @@ int st25r3911b_non_response_timer_set(u16_t fc, bool long_range, bool emv);
  *  @retval 0 If the operation was successful.
  *            Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_mask_receive_timer_set(u32_t fc);
+int st25r3911b_mask_receive_timer_set(uint32_t fc);
 
 /** @brief Perform automatic collision resolution and switch on the NFC Reader
  *         field.
@@ -154,8 +159,8 @@ int st25r3911b_mask_receive_timer_set(u32_t fc);
  *  @retval 0 If the operation was successful.
  *            Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_field_on(u8_t collision_threshold, u8_t peer_threshold,
-			u8_t delay);
+int st25r3911b_field_on(uint8_t collision_threshold, uint8_t peer_threshold,
+			uint8_t delay);
 
 /** @brief Disable NFC Reader Receiver and Transceiver.
  *
@@ -179,7 +184,7 @@ int st25r3911b_rx_tx_disable(void);
  *  @retval 0 If the operation was successful.
  *            Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_fifo_reload_lvl_get(u8_t *tx_lvl, u8_t *rx_lvl);
+int st25r3911b_fifo_reload_lvl_get(uint8_t *tx_lvl, uint8_t *rx_lvl);
 
 /** @brief Enable/disable NFC Reader technology LED.
  *
@@ -192,7 +197,7 @@ int st25r3911b_fifo_reload_lvl_get(u8_t *tx_lvl, u8_t *rx_lvl);
  *  @retval 0 If the operation was successful.
  *            Otherwise, a (negative) error code is returned.
  */
-int st25r3911b_technology_led_set(u32_t led, bool on);
+int st25r3911b_technology_led_set(enum st25r3911b_leds led, bool on);
 
 #ifdef __cplusplus
 }

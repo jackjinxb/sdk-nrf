@@ -1,21 +1,25 @@
 #
 # Copyright (c) 2019 Nordic Semiconductor ASA
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menuconfig LWM2M_CARRIER
 	bool "LwM2M carrier library"
 	depends on NEWLIB_LIBC
-	depends on BSD_LIBRARY && !BSD_LIBRARY_SYS_INIT
+	depends on NRF_MODEM_LIB && !NRF_MODEM_LIB_SYS_INIT
+	depends on PDN
+	# Only have hard-float variant
+	depends on FP_HARDABI
 	# Need a source of entropy
 	depends on ENTROPY_HAS_DRIVER
 	# Flash settings
 	depends on FLASH && FLASH_PAGE_LAYOUT
 	depends on MPU_ALLOW_FLASH_WRITE
 	depends on NVS
-	# Heap requirements
-	depends on (HEAP_MEM_POOL_SIZE >= 16384)
+	# Heap and stack requirements
+	depends on (HEAP_MEM_POOL_SIZE >= 4096)
+	depends on (SYSTEM_WORKQUEUE_STACK_SIZE >= 1312)
 	# NCS dependencies
 	# Networking - Zephyr
 	depends on NETWORKING
@@ -23,14 +27,12 @@ menuconfig LWM2M_CARRIER
 	depends on NET_SOCKETS_OFFLOAD
 	# Networking NCS
 	depends on LTE_LINK_CONTROL && !LTE_AUTO_INIT_AND_CONNECT
-	depends on DOWNLOAD_CLIENT && DOWNLOAD_CLIENT_TLS
+	depends on DOWNLOAD_CLIENT
 	# Credentials NCS
 	depends on MODEM_KEY_MGMT
 	# AT libraries
-	depends on AT_CMD
-	depends on (AT_CMD_RESPONSE_MAX_LEN > 128)
-	depends on AT_CMD_PARSER
-	depends on AT_NOTIF
+	depends on AT_MONITOR
+	depends on (AT_MONITOR_HEAP_SIZE >= 320)
 	# reboot functionality
 	depends on REBOOT
 	help
@@ -38,27 +40,78 @@ menuconfig LWM2M_CARRIER
 
 if LWM2M_CARRIER
 
-config LWM2M_CARRIER_USE_CUSTOM_BOOTSTRAP_URI
-	bool "Use custom bootstrap URI"
+config LWM2M_CARRIER_CERTIFICATION_MODE
+	bool "Connect to certification servers"
+	select LWM2M_CARRIER_IS_SERVER_BOOTSTRAP if LWM2M_CARRIER_USE_CUSTOM_URI
 	help
-	  Use a custom bootstrap URI.
+	  Connect to certification servers instead of production servers.
 
-	  Enabling this option requires that a file "bootstrap_psk.h" is
-	  made available in an include folder.
+config LWM2M_CARRIER_USE_CUSTOM_URI
+	bool "Use custom server URI"
+	help
+	  Use a custom server URI.
 
-	  This file must define the LWM2M bootstrap pre-shared key e.g.:
+if LWM2M_CARRIER_USE_CUSTOM_URI
 
-	  static const char bootstrap_psk[] = {'m', 'y', 'k', 'e', 'y'};
-
-if LWM2M_CARRIER_USE_CUSTOM_BOOTSTRAP_URI
-
-config LWM2M_CARRIER_CUSTOM_BOOTSTRAP_URI
-	string "LwM2M carrier custom bootstrap URI"
+config LWM2M_CARRIER_CUSTOM_URI
+	string "LwM2M carrier custom URI"
 	default ""
 	help
-	  URI of the custom bootstrap server.
+	  URI of the custom server.
 
-endif # LWM2M_CARRIER_USE_CUSTOM_BOOTSTRAP_URI
+config LWM2M_CARRIER_IS_SERVER_BOOTSTRAP
+	bool "Bootstrap-Server"
+	default y
+	help
+	  Configure if server is a LwM2M Bootstrap-Server or a standard LwM2M Server
+
+if !LWM2M_CARRIER_IS_SERVER_BOOTSTRAP
+
+config LWM2M_CARRIER_SERVER_LIFETIME
+	int "Server lifetime"
+	default 60
+	help
+	  Default server lifetime.
+
+endif # !LWM2M_CARRIER_IS_SERVER_BOOTSTRAP
+
+endif # LWM2M_CARRIER_USE_CUSTOM_URI
+
+config LWM2M_CARRIER_USE_CUSTOM_PSK
+	bool "Use custom PSK"
+	help
+	  Use a custom PSK.
+
+if LWM2M_CARRIER_USE_CUSTOM_PSK
+
+config LWM2M_CARRIER_CUSTOM_PSK
+	string "LwM2M carrier custom bootstrap PSK"
+	default ""
+	help
+	  PSK of the custom bootstrap server.
+
+endif # LWM2M_CARRIER_USE_CUSTOM_PSK
+
+config LWM2M_CARRIER_USE_CUSTOM_APN
+	bool "Use custom APN"
+	help
+	  Use a custom APN.
+
+if LWM2M_CARRIER_USE_CUSTOM_APN
+
+config LWM2M_CARRIER_CUSTOM_APN
+	string "LwM2M carrier custom APN"
+	default ""
+	help
+	  Custom APN.
+
+endif # LWM2M_CARRIER_USE_CUSTOM_APN
+
+config LWM2M_CARRIER_BOOTSTRAP_SMARTCARD
+	bool "Allow bootstrap from Smartcard"
+	default y
+	help
+	  Bootstrap from Smartcard mode when this is enabled by the carrier.
 
 module=LWM2M_CARRIER
 module-dep=LOG

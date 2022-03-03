@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _WHEEL_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,7 +23,7 @@ extern "C" {
 struct wheel_event {
 	struct event_header header;
 
-	s16_t wheel;
+	int16_t wheel;
 };
 
 EVENT_TYPE_DECLARE(wheel_event);

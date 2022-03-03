@@ -1,44 +1,34 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdint.h>
+#include "common.h"
 #include <toolchain/common.h>
 #include <sys/util.h>
+#include <drivers/entropy.h>
 
 #if defined(CONFIG_ZTEST)
 #include <ztest.h>
 #endif
 
-#if defined(CONFIG_MBEDTLS)
-#if !defined(CONFIG_MBEDTLS_CFG_FILE)
-#include "mbedtls/config.h"
-#else
-#include CONFIG_MBEDTLS_CFG_FILE
-#endif /* CONFIG_MBEDTLS_CFG_FILE */
-#endif
 #include <mbedtls/platform.h>
 #include <mbedtls/cipher.h>
-#if defined(CONFIG_NRF_CC310_PLATFORM)
-#include <nrf_cc310_platform.h>
-#include <nrf_cc310_platform_abort.h>
-#include <nrf_cc310_platform_mutex.h>
-#endif /* CONFIG_NRF_CC310_PLATFORM) */
 
-#if defined(CONFIG_MBEDTLS_CTR_DRBG_ENABLED)
-#include <mbedtls/ctr_drbg.h>
-
-/* This context will be populated by the below initialization function.
- * If the initialization is successful it can be used in subsequent calls to
- * mbedtls drbg APIs.
+/* Found in nrfxlib/nrf_security/mbedtls/mbedtls_heap.c
+ * Used for reallocating the heap between suites.
  */
-extern mbedtls_ctr_drbg_context ctr_drbg_ctx;
+extern void _heap_init(void);
+extern void _heap_free(void);
 
-/**@brief Function for initializing counter mode deterministic random byte generator.
+/* Points to either CTR or HMAC drbg random depending on what's compiled in */
+extern int (*drbg_random)(void *, unsigned char *, size_t);
+
+/**@brief Function for initializing deterministic random byte generator.
  *
  * @details Should only be called once.
  *
@@ -47,7 +37,42 @@ extern mbedtls_ctr_drbg_context ctr_drbg_ctx;
  *
  * @return								0 on success, else an error code.
  */
-int init_ctr_drbg(const unsigned char *p_optional_seed, size_t len);
+int init_drbg(const unsigned char *p_optional_seed, size_t len);
+
+/**@brief Wrapper function for hex2bin that makes sure that the input pointer is valid.
+ *
+ * @details Will return 0 if given param hex is NULL.
+ *
+ * @param hex     The hexadecimal string to convert
+ * @param buf     Address of where to store the binary data
+ * @param buflen  Size of the storage area for binary data
+ *
+ * @return     The length of the binary array, or 0 if an error occurred.
+ */
+size_t hex2bin_safe(const char *hex, uint8_t *buf, size_t buflen);
+
+#if defined(MBEDTLS_PSA_CRYPTO_EXTERNAL_RNG)
+
+#include "psa/crypto.h"
+#include "nrf_cc3xx_platform_ctr_drbg.h"
+
+extern mbedtls_psa_external_random_context_t drbg_ctx;
+
+#elif defined(MBEDTLS_CTR_DRBG_C)
+
+#include <mbedtls/ctr_drbg.h>
+
+/* This context will be populated by init_drbg.
+ * If the initialization is successful it can be used in subsequent calls to
+ * mbedtls drbg APIs.
+ */
+extern mbedtls_ctr_drbg_context drbg_ctx;
+
+#elif defined(MBEDTLS_HMAC_DRBG_C)
+
+#include <mbedtls/hmac_drbg.h>
+extern mbedtls_hmac_drbg_context drbg_ctx;
+
 #endif
 
 #if defined(CONFIG_ENTROPY_GENERATOR)
@@ -271,8 +296,8 @@ typedef const struct {
 /**@brief ECDSA Verify test vector information.
  */
 typedef const struct {
-	const u32_t src_line_num; /**< Test vector source file line number. */
-	const u32_t curve_type; /**< Curve type for test vector. */
+	const uint32_t src_line_num; /**< Test vector source file line number. */
+	const uint32_t curve_type; /**< Curve type for test vector. */
 	const int expected_err_code; /**< Expected error code from ECDSA verify
 									 operation. */
 	const char *p_test_vector_name; /**< Pointer to ECDSA test vector name. */
@@ -293,8 +318,8 @@ typedef const struct {
 /**@brief ECDSA Sign test vector information.
  */
 typedef const struct {
-	const u32_t src_line_num; /**< Test vector source file line number. */
-	const u32_t curve_type; /**< Curve type for test vector. */
+	const uint32_t src_line_num; /**< Test vector source file line number. */
+	const uint32_t curve_type; /**< Curve type for test vector. */
 	const int expected_sign_err_code; /**< Expected error code from ECDSA sign
 									   operation. */
 	const int expected_verify_err_code; /**< Expected result of following ECDSA
@@ -315,8 +340,8 @@ typedef const struct {
 /**@brief ECDSA Random test vector information.
  */
 typedef const struct {
-	const u32_t src_line_num; /**< Test vector source file line number. */
-	const u32_t curve_type; /**< Curve type for test vector. */
+	const uint32_t src_line_num; /**< Test vector source file line number. */
+	const uint32_t curve_type; /**< Curve type for test vector. */
 	const char *p_test_vector_name; /**< Pointer to ECDSA test vector name. */
 	const char *
 		p_input; /**< Pointer to ECDSA hash input in hex string format. */
@@ -326,7 +351,7 @@ typedef const struct {
 /**@brief ECDH test vector information.
  */
 typedef const struct {
-	const u32_t curve_type; /**< Curve type for test vector. */
+	const uint32_t curve_type; /**< Curve type for test vector. */
 	const int expected_err_code; /**< Expected error code from ECDH operation. */
 	const uint8_t expected_result; /**< Expected result of ECDH operation. */
 	const char *p_test_vector_name; /**< Pointer to ECDH test vector name. */
@@ -355,7 +380,7 @@ typedef const struct {
 /**@brief Hash test vector information.
  */
 typedef const struct {
-	const u32_t digest_type; /**< Digest type of hash operation. */
+	const uint32_t digest_type; /**< Digest type of hash operation. */
 	const int expected_err_code; /**< Expected error code from hash operation. */
 	const uint8_t expected_result; /**< Expected result of hash operation. */
 	const hash_mem_mode_t mode; /**< Hash memory operation. */
@@ -374,7 +399,7 @@ typedef const struct {
 /**@brief hmac test vector information.
  */
 typedef const struct {
-	const u32_t digest_type; /**< Digest type of hmac operation. */
+	const uint32_t digest_type; /**< Digest type of hmac operation. */
 	const int expected_err_code; /**< Expected error code from hmac operation. */
 	const uint8_t expected_result; /**< Expected result of hmac operation. */
 	const char *p_test_vector_name; /**< Pointer to hmac test vector name. */
@@ -388,7 +413,7 @@ typedef const struct {
 /**@brief hkdf test vector information.
  */
 typedef const struct {
-	const u32_t digest_type; /**< Digest type of hkdf operation. */
+	const uint32_t digest_type; /**< Digest type of hkdf operation. */
 	const int expected_err_code; /**< Expected error code from hkdf operation. */
 	const int expected_err_code_expand; /**< Expected error code from hkdf expand
 										 operation. */
@@ -418,30 +443,38 @@ void stop_time_measurement(void);
 
 /**@brief Macro(s) for decorating test vector names with file and line information.
  */
+#ifndef TV_NAME
 #define TV_NAME(name) name " -- [" __FILE__ ":" STRINGIFY(__LINE__) "]"
+#endif
 
 /**@brief   Macro for obtaining the address of the beginning of a section.
  *
  * param[in]    section_name    Name of the section.
  * @hideinitializer
  */
+#ifndef SECTION_START_ADDR
 #define SECTION_START_ADDR(section_name) (&UTIL_CAT(__start_, section_name))
+#endif
 
 /**@brief    Macro for obtaining the address of the end of a section.
  *
  * @param[in]   section_name    Name of the section.
  * @hideinitializer
  */
+#ifndef SECTION_END_ADDR
 #define SECTION_END_ADDR(section_name) (&UTIL_CAT(__stop_, section_name))
+#endif
 
 /**@brief   Macro for retrieving the length of a given section, in bytes.
  *
  * @param[in]   section_name    Name of the section.
  * @hideinitializer
  */
+#ifndef SECTION_LENGTH
 #define SECTION_LENGTH(section_name)                                           \
 	((size_t)SECTION_END_ADDR(section_name) -                              \
 	 (size_t)SECTION_START_ADDR(section_name))
+#endif
 
 /**@brief   Macro for declaring a variable and registering it in a section.
  *
@@ -455,8 +488,10 @@ void stop_time_measurement(void);
  * @param[in]   section_var     Variable to register in the given section.
  * @hideinitializer
  */
+#ifndef ITEM_REGISTER
 #define ITEM_REGISTER(section_name, section_var)                               \
 	Z_GENERIC_SECTION(section_name) __attribute__((used)) section_var
+#endif
 
 /**@brief   Macro for retrieving a variable from a section.
  *
@@ -471,8 +506,10 @@ void stop_time_measurement(void);
  * @param[in]   i               Index of the variable in section.
  * @hideinitializer
  */
+#ifndef ITEM_GET
 #define ITEM_GET(section_name, data_type, i)                                   \
 	((data_type *)SECTION_START_ADDR(section_name) + (i))
+#endif
 
 /**@brief   Macro for getting the number of variables in a section.
  *
@@ -480,8 +517,10 @@ void stop_time_measurement(void);
  * @param[in]   data_type       Data type of the variables in the section.
  * @hideinitializer
  */
+#ifndef ITEM_COUNT
 #define ITEM_COUNT(section_name, data_type)                                    \
 	(SECTION_LENGTH(section_name) / sizeof(data_type))
+#endif
 
 /**@brief Macro for comparing two data buffers.
  *

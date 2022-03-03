@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _DATA_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,12 +23,12 @@ extern "C" {
 struct data_event {
 	struct event_header header;
 
-	s8_t val1;
-	s16_t val2;
-	s32_t val3;
-	u8_t val1u;
-	u16_t val2u;
-	u32_t val3u;
+	int8_t val1;
+	int16_t val2;
+	int32_t val3;
+	uint8_t val1u;
+	uint16_t val2u;
+	uint32_t val3u;
 
 	char *descr;
 };

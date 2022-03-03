@@ -1,4 +1,9 @@
 tests:
-  net.lib.fota.json:
-    platform_whitelist: native_posix nrf52840_pca10056 nrf9160_pca10090
+  net.lib.aws_fota.aws_fota_json:
+    platform_allow: native_posix nrf52840dk_nrf52840 nrf9160dk_nrf9160 qemu_cortex_m3
+    integration_platforms:
+      - native_posix
+      - nrf52840dk_nrf52840
+      - nrf9160dk_nrf9160
+      - qemu_cortex_m3
     tags: aws fota json

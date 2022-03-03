@@ -1,29 +1,70 @@
 .. _bluetooth_mesh_light_switch:
 
-Bluetooth: Mesh Light Switch
+Bluetooth: Mesh light switch
 ############################
 
-The Bluetooth Mesh Light Switch sample demonstrates how to set up a basic Mesh client model application and control LEDs with the Bluetooth Mesh, using the :ref:`bt_mesh_onoff_readme`.
+.. contents::
+   :local:
+   :depth: 2
+
+The :ref:`ug_bt_mesh` light switch sample can be used to change the state of light sources on other devices within the same mesh network.
+It also demonstrates how to use Bluetooth® mesh models by using the Generic OnOff Client model in an application.
+
+Use the light switch sample with the :ref:`bluetooth_mesh_light` sample to demonstrate its function in a Bluetooth mesh network.
+
+Requirements
+************
+
+The sample supports the following development kits:
+
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf5340dk_nrf5340_cpuapp_and_cpuapp_ns, nrf52840dk_nrf52840, nrf52dk_nrf52832, nrf52833dk_nrf52833, thingy53_nrf5340_cpuapp_and_cpuapp_ns, nrf21540dk_nrf52840
+
+You need at least two development kits:
+
+* One development kit where you program this sample application (the client)
+* One (or more) development kit(s) where you program the :ref:`bluetooth_mesh_light` sample application (the server(s)), and configure according to the mesh light sample's :ref:`testing guide <bluetooth_mesh_light_testing>`
+
+For provisioning and configuring of the mesh model instances, the sample requires a smartphone with Nordic Semiconductor's nRF Mesh mobile app installed in one of the following versions:
+
+* `nRF Mesh mobile app for Android`_
+* `nRF Mesh mobile app for iOS`_
+
+.. note::
+   |thingy53_sample_note|
 
 Overview
 ********
 
-This sample is split into two source files:
+The Bluetooth mesh light switch sample demonstrates how to set up a mesh client model application, and control LEDs with the Bluetooth mesh using the :ref:`bt_mesh_onoff_readme`.
+To display any functionality, the sample must be paired with a device with the :ref:`bluetooth_mesh_light` sample running in the same mesh network.
 
-* A main file to handle initialization.
-* One additional file for handling Mesh models
+In both samples, devices are nodes with a provisionee role in a mesh network.
+Provisioning is performed using the `nRF Mesh mobile app`_.
+This mobile application is also used to configure key bindings, and publication and subscription settings of the Bluetooth mesh model instances in the sample to enable them to communicate with the servers.
+
+The Generic OnOff Client model is used for manipulating the Generic OnOff state associated with the Generic OnOff Server model.
+The light switch sample implements the Generic OnOff Client model.
+
+The sample instantiates up to four instances of the Generic OnOff Client model to control the state of LEDs on servers (implemented by the :ref:`bluetooth_mesh_light` sample).
+One instance of the Generic OnOff Client model is instantiated in the light switch sample for each button available on the development kit that is used.
+When a user presses any of the buttons, an OnOff Set message is sent out to the configured destination address.
+
+After provisioning and configuring the mesh models supported by the sample using the `nRF Mesh mobile app`_, you can control the LEDs on the other (server) development kit(s) from the app.
 
 Provisioning
 ============
 
 Provisioning is handled by the :ref:`bt_mesh_dk_prov`.
+It supports four types of out-of-band (OOB) authentication methods, and uses the Hardware Information driver to generate a deterministic UUID to uniquely represent the device.
 
 Models
 ======
 
-This sample application has the following composition data:
+The following table shows the mesh light switch composition data for this sample:
 
-.. table:: Mesh light composition data
+.. table::
    :align: center
 
    =================  =================  =================  =================
@@ -34,47 +75,66 @@ This sample application has the following composition data:
    Gen. OnOff Client
    =================  =================  =================  =================
 
-The :ref:`bt_mesh_onoff_cli_readme` instances in elements 1-4 are controlled by the buttons on the Device Kit.
-The Config server allows configurator devices to configure the node remotely.
-The Health server is used to call attention to the device during provisioning.
+.. note::
+   When used with :ref:`zephyr:thingy53_nrf5340`, Elements 3 and 4 are not available.
+   :ref:`zephyr:thingy53_nrf5340` supports only two buttons.
 
-The model handling is implemented in src/model_handler.c, which uses the :ref:`dk_buttons_and_leds_readme` to detect button presses on the board.
+The models are used for the following purposes:
 
-The model handler calls :cpp:func:`bt_mesh_onoff_cli_set` to turn the LEDs of a Mesh Light device on or off.
-As we pass a response buffer to the function, it will will block until the model receives a response from the target device.
-If the function returns successfully, the response buffer will contain the response from the Mesh Light.
-In this example, the contents of the response will be ignored, as we handle all incoming OnOff status messages in the status callback.
-Note that the response structure is still required, as the Generic OnOff Client model won't request a response from the Server if we pass ``NULL`` in the response parameter.
+* :ref:`bt_mesh_onoff_cli_readme` instances in available elements are controlled by the buttons on the development kit.
+* Config Server allows configurator devices to configure the node remotely.
+* Health Server provides ``attention`` callbacks that are used during provisioning to call your attention to the device.
+  These callbacks trigger blinking of the LEDs.
 
-The button handling is deferred to its own button handling thread to avoid blocking the system workqueue.
-As the call to :cpp:func:`bt_mesh_onoff_cli_set` blocks until it receives a response, the caller might be blocked for seconds, which would severely impact other activities on the device.
-This button handling thread is a loop that waits for a semaphore signaled by the button handler callback, and triggers calls to the appropriate Generic OnOff Client model.
+The model handling is implemented in :file:`src/model_handler.c`, which uses the :ref:`dk_buttons_and_leds_readme` library to detect button presses on the development kit.
 
-Requirements
-************
+If the model is configured to publish to a unicast address, the model handler calls :c:func:`bt_mesh_onoff_cli_set` to turn the LEDs of a mesh light device on or off.
+The response from the target device updates the corresponding LED on the mesh light switch device.
+If the model is configured to publish to a group address, it calls :c:func:`bt_mesh_onoff_cli_set_unack` instead, to avoid getting responses from multiple devices at once.
 
-* One of the following development boards:
-
-  * nRF52840 Development Kit board (PCA10056)
-  * nRF52 Development Kit board (PCA10040)
-  * nRF51 Development Kit board (PCA10028)
-
-* The Nordic Semiconductor nRF Mesh app for Android or iOS.
-* The :ref:`bluetooth_mesh_light` sample application programmed on a separate device, and configured according to the Mesh Light sample's :ref:`bluetooth_mesh_light_testing` guide.
+.. _bluetooth_mesh_light_switch_user_interface:
 
 User interface
 **************
 
 Buttons:
-   Buttons are used to control their own Generic OnOff Clients.
-   When pressed, the button will toggle the LED state on a :ref:`bluetooth_mesh_light` device.
+      During the provisioning process, the buttons can be used for OOB input.
+      Once the provisioning and configuration are completed, the buttons are used to initiate certain actions and control the respective Generic OnOff Client instances.
+      When pressed, the button publishes an OnOff message using the configured publication parameters of its model instance, and toggles the LED state on a :ref:`mesh light <bluetooth_mesh_light>` device.
 
 LEDs:
-   Shows the last known OnOff state of the targeted :ref:`bluetooth_mesh_light` board.
+   During the provisioning process, on board LEDs are used to output the OOB actions.
+   Once the provisioning and configuration are completed, the LEDs are used to reflect the status of actions, and they show the last known OnOff state of the corresponding button.
 
+.. note::
+   :ref:`zephyr:thingy53_nrf5340` supports only one RGB LED.
+   Each RGB LED channel is used as separate LED.
+
+Configuration
+*************
+
+|config|
+
+Source file setup
+=================
+
+The light switch sample is split into the following source files:
+
+* :file:`main.c` used to handle initialization.
+* :file:`model_handler.c` used to handle mesh models.
+* :file:`thingy53.c` used to handle preinitialization of the :ref:`zephyr:thingy53_nrf5340` board.
+  Only compiled when the sample is built for :ref:`zephyr:thingy53_nrf5340` board.
+
+FEM support
+===========
+
+.. include:: /includes/sample_fem_support.txt
 
 Building and running
 ********************
+
+Make sure to enable the Bluetooth mesh in |NCS| before building and testing this sample.
+See :ref:`Bluetooth mesh user guide <ug_bt_mesh>` for more information.
 
 .. |sample path| replace:: :file:`samples/bluetooth/mesh/light_switch`
 
@@ -85,42 +145,35 @@ Building and running
 Testing
 =======
 
-.. important::
-   The Light Switch sample cannot demonstrate any functionality on its own, and needs a device with the :ref:`bluetooth_mesh_light` sample running in the same mesh network.
-   Before testing the Mesh Light Switch, go through the Mesh Light's :ref:`bluetooth_mesh_light_testing` guide with a different board.
+.. note::
+   The light switch sample cannot demonstrate any functionality on its own, and needs a device with the :ref:`bluetooth_mesh_light` sample running in the same mesh network.
+   Before testing mesh light switch, go through the mesh light's :ref:`testing guide <bluetooth_mesh_light_testing>` with a different development kit.
 
-After programming the sample to your board, you can test it by using the Nordic Semiconductor nRF Mesh app for Android or iOS.
+After programming the sample to your development kit, you can test it by using a smartphone with `nRF Mesh mobile app`_ installed.
+Testing consists of provisioning the device and configuring it for communication with the mesh models.
 
-Provisioning and configuration
-------------------------------
+Provisioning the device
+-----------------------
 
-Before communicating with the mesh models, the device must be provisioned.
-The provisioning assigns an address range to the device, and adds it to the mesh network.
-Provisioning is done through the nRF Mesh app:
+.. |device name| replace:: :guilabel:`Mesh Light Switch`
 
-1. Press "Add node" to start scanning for unprovisioned mesh devices.
-#. Press the "Mesh Light Switch" device to connect to it.
-#. Press "Identify", then "Provision" to provision the device.
-#. When prompted, select an OOB method and follow the instructions in the app.
-#. Once the provisioning and initial configuration is complete, the app will go back to the Network screen.
-   Press the **Mesh Light Switch** node in the list.
-   You'll see basic information about your mesh node and its configuration.
-#. In the Mesh node view, expand the first element.
-   It contains the list of models in the first element of the node.
-#. Press the "Generic OnOff Client" model to see its configuration.
-#. Models must be bound to application keys to be open to communication.
-   Do this by pressing "BIND KEY" at the top of the screen.
-   Select "Application Key 1" from the list.
-#. In addition to the application key binding, Client models need publish parameters to be configured.
-   The publish parameters define how the model should send its messages.
-   Press "SET PUBLICATION" to configure the publish parameters.
-#. Set the Publish Address to the first unicast address of the Mesh Light node.
-   Set the Retransmit Count to zero ("Disabled") to prevent the model from sending each button press multiple times.
-   The rest of the publish parameters can be left at their default values.
-   Press "APPLY" to accept the configuration.
-#. You should now be able to control the first LED on the Mesh Light device by pressing Button 1 on the Mesh Light Switch device kit.
+.. include:: /includes/mesh_device_provisioning.txt
 
-Repeat steps 7-10 for each of the elements on the node to control each of the four LEDs on the Mesh Light device.
+Configuring models
+------------------
+
+See :ref:`ug_bt_mesh_model_config_app` for details on how to configure the mesh models with the nRF Mesh mobile app.
+
+Configure the Generic OnOff Client model on each element on the :guilabel:`Mesh Light Switch` node:
+
+* Bind the model to :guilabel:`Application Key 1`.
+* Set the publication parameters:
+
+  * Destination/publish address: Set the :guilabel:`Publish Address` to the first unicast address of the Mesh Light node.
+  * Retransmit count: Set the count to zero (:guilabel:`Disabled`), to prevent the model from sending each button press multiple times.
+
+Once the provisioning and the configuration of the client node and at least one of the server nodes are complete, you can use buttons on the client development kit.
+The buttons will control the LED lights on the associated servers, as described in :ref:`bluetooth_mesh_light_switch_user_interface`.
 
 Dependencies
 ************
@@ -128,12 +181,13 @@ Dependencies
 This sample uses the following |NCS| libraries:
 
 * :ref:`bt_mesh_onoff_cli_readme`
+* :ref:`bt_mesh_dk_prov`
 * :ref:`dk_buttons_and_leds_readme`
 
 In addition, it uses the following Zephyr libraries:
 
 * ``include/drivers/hwinfo.h``
-* :ref:`zephyr:kernel`:
+* :ref:`zephyr:kernel_api`:
 
   * ``include/kernel.h``
 

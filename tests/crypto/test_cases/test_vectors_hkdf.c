@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -207,7 +207,7 @@ ITEM_REGISTER(test_vector_hkdf_data,
 	.p_info = ""
 };
 
-#if defined(CONFIG_MBEDTLS_SHA512_C)
+#if defined(MBEDTLS_SHA512_C)
 
 /* HKDF - SHA-512 Custom test case 1 */
 ITEM_REGISTER(test_vector_hkdf_data,

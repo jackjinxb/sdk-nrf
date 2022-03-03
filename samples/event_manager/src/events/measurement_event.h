@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef _MEASUREMENT_EVENT_H_
@@ -13,7 +13,8 @@
  * @{
  */
 
-#include "event_manager.h"
+#include <event_manager.h>
+#include <event_manager_profiler_tracer.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -22,9 +23,9 @@ extern "C" {
 struct measurement_event {
 	struct event_header header;
 
-	s8_t value1;
-	s16_t value2;
-	s32_t value3;
+	int8_t value1;
+	int16_t value2;
+	int32_t value3;
 };
 
 EVENT_TYPE_DECLARE(measurement_event);

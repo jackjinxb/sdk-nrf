@@ -3,185 +3,166 @@
 Building the |NCS| documentation
 ################################
 
-The |NCS| documentation is written using the reStructuredText markup
-language (.rst file extension) with Sphinx extensions and processed
-using Sphinx.
-API documentation is included from Doxygen comments.
+.. contents::
+   :local:
+   :depth: 2
 
-See the *Documentation overview* section in the :ref:`zephyr:zephyr_doc` developer guide for information about reStructuredText.
+The |NCS| documentation is written using the reStructuredText markup language (:file:`.rst` file extension) with Sphinx extensions and processed using Sphinx.
+API documentation is generated from Doxygen comments.
 
+See :ref:`zephyr:documentation-overview` in the Zephyr developer guide for information about reStructuredText.
 
 Before you start
 ****************
 
-Before you can build the documentation, install the |NCS| as described in :ref:`gs_installing`.
-Make sure that you have installed the required :ref:`Python dependencies <additional_deps_win>`.
+Before you can build the documentation, you must install the required tools.
+The following tool versions have been tested to work:
 
-See the *Installing the documentation processors* section in the :ref:`zephyr:zephyr_doc` developer guide for information about installing the required tools to build the documentation and their supported versions.
+* Doxygen 1.9.2
+* Mscgen 0.20
+* PlantUML
+* Python dependencies as listed in :ref:`python_req_documentation` on the Requirements page
 
-.. note::
-   On Windows, the Sphinx executable ``sphinx-build.exe`` is placed in
-   the ``Scripts`` folder of your Python installation path.
-   Dependending on how you have installed Python, you may need to
-   add this folder to your ``PATH`` environment variable. Follow
-   the instructions in `Windows Python Path`_ to add those if needed.
+Complete the following steps to install the required tools:
 
+1. If you have not done so already, install the |NCS| as described in :ref:`gs_installing` or :ref:`gs_assistant`.
+#. Install or update all required :ref:`Python dependencies <additional_deps>`.
+#. Install `Doxygen`_.
+#. Install `mscgen`_ and make sure that the ``mscgen`` executable is in your :envvar:`PATH`.
+#. Install PlantUML.
+   On Windows, you can install `PlantUML from chocolatey`_.
 
-Documentation structure
-***********************
-
-All documentation build files are located in the ``ncs/nrf/doc`` folder.
-The ``nrf`` subfolder in that directory contains all .rst source files that are not directly related to a sample application or a library.
-Documentation for samples and libraries are provided in a ``README.rst`` or ``*.rst`` file in the same directory as the code.
-
-Building the documentation output requires building output for all documentation sets.
-Currently, there are four sets: nrf, nrfxlib, zephyr, and mcuboot (covering the contents of :file:`bootloader/mcuboot`).
-Since there are links from the ncs documentation set into other documentation sets, the other documentation sets must be built first.
+.. _doc_build_steps:
 
 Building documentation output
 *****************************
 
+All documentation build files are located in the :file:`ncs/nrf/doc` folder.
+The :file:`nrf` subfolder in that directory contains all :file:`.rst` source files that are not directly related to a sample application or a library.
+Documentation for samples and libraries is provided in a :file:`README.rst` or another :file:`.rst` file in the same directory as the code.
+
+Building the documentation output requires building the output for all documentation sets that are part of the :ref:`doc_structure`.
+Since there are links from the |NCS| documentation set into other documentation sets, the documentation is built in a predefined order.
+
 Complete the following steps to build the documentation output:
 
-1. Create the build folder ``ncs/nrf/doc/_build``.
+1. Open a command-line window and enter the doc folder :file:`ncs/nrf/doc`.
+#. Generate the Ninja build files by entering the following command:
 
-   * On Windows:
+   .. code-block:: console
 
-     a. Navigate to ``ncs/nrf/doc``.
-     #. Right-click to create a folder and name it ``_build``.
-     #. Hold shift and right-click on the new folder.
-        Select **Open command window here**.
+      cmake -GNinja -S. -B_build
 
-   * On Linux or macOS:
+#. Enter the generated build folder:
 
-     a. Open a shell window.
-     #. Navigate to ``ncs/nrf/doc``.
-        If the ncs folder is in your home directory, enter:
+   .. code-block:: console
 
-        .. code-block:: console
+      cd _build
 
-           cd ~/ncs/nrf/doc
+#. Run ninja to build the complete documentation by entering the following command:
 
-     #. Create a folder named ``_build`` and enter it:
+   .. code-block:: console
 
-        .. code-block:: console
+      ninja
 
-           mkdir -p _build && cd _build
+The documentation output is written to the :file:`doc/_build/html` folder.
+Double-click the :file:`index.html` file to display the documentation in your browser.
 
-#. Load the environment setting for Zephyr builds.
+Alternatively, you can work with just a single documentation set, for example, ``nrf``.
+The build system provides individual targets for such a purpose.
+If you have not built all documentation sets before, it is recommended to run the following command:
 
-   * On Windows:
+.. parsed-literal::
 
-        .. code-block:: console
+   ninja *docset-name*-html-all
 
-           ..\..\..\zephyr\zephyr-env.cmd
-   * On Linux or macOS:
+Here, *docset-name* is the name of the documentation set, for example, ``nrf``.
+This target will build the :ref:`documentation sets <documentation_sets>` that are needed for *docset-name*.
 
-        .. code-block:: console
+On subsequent builds, it is recommended to just run the following command:
 
-           source ../../../zephyr/zephyr-env.sh
+.. parsed-literal::
 
-#. Generate the Ninja build files:
+   ninja *docset-name*-html
 
-        .. code-block:: console
+Alternatively, for subsequent builds, you can run the ninja command using the alias target *docset-name* instead of *docset-name*-html:
 
-           cmake -GNinja ..
+.. parsed-literal::
 
-#. Run ninja to build the Zephyr documentation:
+   ninja *docset-name*
 
-        .. code-block:: console
+The last couple of targets mentioned in :ref:`documentation_sets` will only invoke the build for the corresponding documentation set (referred by *docset-name*), assuming that all of its dependencies are available.
 
-           ninja zephyr
-
-   This step can take up to 15 minutes.
-#. Run ninja to build the nrfxlib documentation:
-
-        .. code-block:: console
-
-           ninja nrfxlib
-
-#. Run ninja to build the mcuboot documentation:
-
-        .. code-block:: console
-
-           ninja mcuboot
-
-#. Run ninja to build the |NCS| documentation:
-
-        .. code-block:: console
-
-           ninja nrf
-
-The documentation output is written to ``_build\html``. Double-click the ``index.html`` file to display the documentation in your browser.
-
-.. tip::
-   If you modify or add RST files, you only need to rerun the steps that build the respective documentation: step 4 (if you modified the Zephyr documentation), step 5 (if you modified the nrfxlib documentation), step 6 (if you modified the MCUboot documentation), or step 7 (if you modified the |NCS| documentation).
-
-   If you open up a new command prompt, you must repeat step 2.
+.. _caching_and_cleaning:
 
 Caching and cleaning
 ********************
 
 To speed up the documentation build, Sphinx processes only those files that have been changed since the last build.
-In addition, RST files are copied to a different location during the build process.
-This mechanism can cause outdated or deleted files to be used in the build, or the navigation to not be updated as expected.
+This mechanism can sometimes cause issues such as navigation not being updated correctly.
 
-If you experience any such problems, clean the build folders before you run the documentation build.
-Note that this will cause the documentation to be built from scratch, which takes a considerable time.
+If you experience any of such issues, clean the build folders before you run the documentation build.
 
-To clean the build folders for the Zephyr documentation:
+To clean all the build files:
 
 .. code-block:: console
 
-   ninja clean-zephyr
+   ninja clean
 
-To clean the build folders for the nrfxlib documentation:
+To clean the build folders for a particular documentation set:
 
-.. code-block:: console
+.. parsed-literal::
 
-   ninja clean-nrfxlib
+   ninja *docset-name*-clean
 
-To clean the build folders for the MCUboot documentation:
+Here, *docset-name* is the name of the documentation set, for example, ``nrf``.
 
-.. code-block:: console
+Downloading cached builds
+=========================
 
-   ninja clean-mcuboot
+The |NCS| provides cached builds for the current documentation.
+That means that if you do not have local modifications to a documentation set, you can download a cached version of the build.
+Downloading is usually quicker than building the documentation from scratch, however, this might depend on your Internet connection speed.
 
-To clean the build folders for the |NCS| documentation:
+.. note::
+   Using cached builds is currently in an experimental state.
 
-.. code-block:: console
+To enable the online cache, set the :envvar:`NCS_CACHE_ENABLE` environment variable.
+For example, on Windows, enter the following command::
 
-   ninja clean-nrf
+  set NCS_CACHE_ENABLE=1
 
-Out-of-tree builds
-******************
+The cached build is downloaded only if there are no local modifications to a specific documentation set.
+To force the download even if there are local modifications, set :envvar:`NCS_CACHE_FORCE` in addition to :envvar:`NCS_CACHE_ENABLE`.
 
-Out-of-tree builds are also supported, so you can actually build from outside
-the source tree:
+.. _testing_versions:
 
-.. code-block:: console
+Testing different versions locally
+**********************************
 
-   # On Linux/macOS
-   cd ~
-   source ncs/zephyr/zephyr-env.sh
-   cd ~
-   mkdir build
-   # On Windows
-   cd %userprofile%
-   ncs\zephyr\zephyr-env.cmd
-   mkdir build
+Documentation sets for different versions of the |NCS| are defined in the :file:`doc/versions.json` file.
+This file is used to display the :ref:`version drop-down <doc_structure_versions>`.
 
-   # Use cmake to configure a Ninja-based build system:
-   cmake -GNinja -Bbuild/ -Hncs/nrf/doc
-   # Now run ninja on the generated build system:
-   ninja -C build/ zephyr
-   ninja -C build/ nrfxlib
-   ninja -C build/ mcuboot
-   ninja -C build/ nrf
-   # If you modify or add .rst files in the nRF repository, run ninja again:
-   ninja -C build/ nrf
+To test the version drop-down locally, complete the following steps:
 
-If you want to build the documentation from scratch just delete the contents
-of the build folder and run ``cmake`` and then ``ninja`` again.
+1. In the documentation build folder (for example, :file:`_build`), rename the :file:`html` folder to :file:`latest`.
+#. Open a command-line window in the documentation build folder and enter the following command to start a Python web server::
 
-.. _Windows Python Path: https://docs.python.org/3/using/windows.html#finding-the-python-executable
+      python -m http.server
+
+#. Access http://localhost:8000/latest/index.html with your browser to see the documentation.
+
+To add other versions of the documentation to your local documentation output, build the versions from a tagged release and rename the :file:`html` folder to the respective version (for example, |release_number_tt|).
+
+Dealing with warnings
+*********************
+
+When building the documentation, all warnings are regarded as errors, so they will make the documentation build fail.
+
+However, there are some known issues with Sphinx and Breathe that generate Sphinx warnings even though the input is valid C code.
+To deal with such unavoidable warnings, Zephyr provides the Sphinx extension ``zephyr.warnings_filter`` that filters out warnings based on a set of regular expressions.
+You can find the extension together with usage details at :file:`ncs/zephyr/doc/_extensions/zephyr/warnings_filter.py`.
+
+The configuration file that defines the expected warnings for the nrf documentation set is located at :file:`ncs/nrf/doc/nrf/known-warnings.txt`.
+It contains regular expressions to filter out warnings related to duplicate C declarations.
+These warnings are caused by different objects (for example, a struct and a function or nested elements) sharing the same name.

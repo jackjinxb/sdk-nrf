@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /** @file
@@ -32,10 +32,10 @@ static const struct bt_data ad[] = {
 };
 
 static const struct bt_data sd[] = {
-	BT_DATA_BYTES(BT_DATA_UUID128_ALL, NUS_UUID_SERVICE),
+	BT_DATA_BYTES(BT_DATA_UUID128_ALL, BT_UUID_NUS_VAL),
 };
 
-static void connected(struct bt_conn *conn, u8_t err)
+static void connected(struct bt_conn *conn, uint8_t err)
 {
 	if (err) {
 		LOG_ERR("Connection failed (err %u)", err);
@@ -47,7 +47,7 @@ static void connected(struct bt_conn *conn, u8_t err)
 	shell_bt_nus_enable(conn);
 }
 
-static void disconnected(struct bt_conn *conn, u8_t reason)
+static void disconnected(struct bt_conn *conn, uint8_t reason)
 {
 	LOG_INF("Disconnected (reason %u)", reason);
 
@@ -81,7 +81,7 @@ static void __attribute__((unused)) security_changed(struct bt_conn *conn,
 	}
 }
 
-static struct bt_conn_cb conn_callbacks = {
+BT_CONN_CB_DEFINE(conn_callbacks) = {
 	.connected    = connected,
 	.disconnected = disconnected,
 	COND_CODE_1(CONFIG_BT_SMP,
@@ -98,13 +98,6 @@ static void auth_cancel(struct bt_conn *conn)
 	LOG_INF("Pairing cancelled: %s", log_addr(conn));
 }
 
-static void pairing_confirm(struct bt_conn *conn)
-{
-	bt_conn_auth_pairing_confirm(conn);
-
-	LOG_INF("Pairing confirmed: %s", log_addr(conn));
-}
-
 static void pairing_complete(struct bt_conn *conn, bool bonded)
 {
 	LOG_INF("Pairing completed: %s, bonded: %d", log_addr(conn), bonded);
@@ -118,7 +111,6 @@ static void pairing_failed(struct bt_conn *conn, enum bt_security_err reason)
 static struct bt_conn_auth_cb conn_auth_callbacks = {
 	.passkey_display = auth_passkey_display,
 	.cancel = auth_cancel,
-	.pairing_confirm = pairing_confirm,
 	.pairing_complete = pairing_complete,
 	.pairing_failed = pairing_failed
 };
@@ -129,7 +121,6 @@ void main(void)
 
 	printk("Starting Bluetooth NUS shell transport example\n");
 
-	bt_conn_cb_register(&conn_callbacks);
 	if (IS_ENABLED(CONFIG_BT_SMP)) {
 		bt_conn_auth_cb_register(&conn_auth_callbacks);
 	}
@@ -156,4 +147,3 @@ void main(void)
 	LOG_INF("Bluetooth ready. Advertising started.");
 
 }
-

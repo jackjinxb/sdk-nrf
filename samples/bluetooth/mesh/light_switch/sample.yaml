@@ -1,9 +1,18 @@
 sample:
-  description: TBD
-  name: Bluetooth Mesh Light
+  name: Bluetooth mesh light switch
+  description: Bluetooth mesh light switch sample
 tests:
-  test_build:
+  samples.bluetooth.mesh.light_switch:
     build_only: true
-    build_on_all: true
-    platform_whitelist: nrf51_pca10028 nrf52_pca10040 nrf52840_pca10056 nrf5340_dk_nrf5340_cpuapp
+    platform_allow: nrf52dk_nrf52832 nrf52840dk_nrf52840 nrf5340dk_nrf5340_cpuapp
+      nrf5340dk_nrf5340_cpuapp_ns thingy53_nrf5340_cpuapp thingy53_nrf5340_cpuapp_ns
+      nrf21540dk_nrf52840
     tags: bluetooth ci_build
+    integration_platforms:
+      - nrf52dk_nrf52832
+      - nrf52840dk_nrf52840
+      - nrf5340dk_nrf5340_cpuapp
+      - nrf5340dk_nrf5340_cpuapp_ns
+      - thingy53_nrf5340_cpuapp
+      - thingy53_nrf5340_cpuapp_ns
+      - nrf21540dk_nrf52840

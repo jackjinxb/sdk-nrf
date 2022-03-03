@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -38,10 +38,6 @@ struct bt_mesh_plvl_srv;
 		.lvl = BT_MESH_LVL_SRV_INIT(&bt_mesh_plvl_srv_lvl_handlers),   \
 		.ponoff = BT_MESH_PONOFF_SRV_INIT(                             \
 			&bt_mesh_plvl_srv_onoff_handlers, NULL, NULL),         \
-		.pub = { .update = _bt_mesh_plvl_srv_update_handler,           \
-			 .msg = NET_BUF_SIMPLE(BT_MESH_MODEL_BUF_LEN(          \
-				 BT_MESH_PLVL_OP_LEVEL_STATUS,                 \
-				 BT_MESH_PLVL_MSG_MAXLEN_LEVEL_STATUS)) },     \
 		.handlers = _handlers,                                         \
 	}
 
@@ -63,11 +59,17 @@ struct bt_mesh_plvl_srv;
 				 _bt_mesh_plvl_setup_srv_op, NULL,             \
 				 BT_MESH_MODEL_USER_DATA(                      \
 					 struct bt_mesh_plvl_srv, _srv),       \
-				 NULL)
+				 &_bt_mesh_plvl_setup_srv_cb)
 
 /** Collection of handler callbacks for the Generic Power Level Server. */
 struct bt_mesh_plvl_srv_handlers {
 	/** @brief Set the Power state.
+	 *
+	 * When a set message is received, the model publishes a status message, with the response
+	 * set to @c rsp. When an acknowledged set message is received, the model also sends a
+	 * response back to a client. If a state change is non-instantaneous, for example when
+	 * @ref bt_mesh_model_transition_time returns a nonzero value, the application is
+	 * responsible for publishing a value of the Power state at the end of the transition.
 	 *
 	 * @note This handler is mandatory.
 	 *
@@ -108,7 +110,7 @@ struct bt_mesh_plvl_srv_handlers {
 	 */
 	void (*const default_update)(struct bt_mesh_plvl_srv *srv,
 				     struct bt_mesh_msg_ctx *ctx,
-				     u16_t old_default, u16_t new_default);
+				     uint16_t old_default, uint16_t new_default);
 
 	/** @brief The Power Range state has changed.
 	 *
@@ -143,19 +145,31 @@ struct bt_mesh_plvl_srv {
 	struct bt_mesh_ponoff_srv ponoff;
 	/** Pointer to the model entry in the composition data. */
 	struct bt_mesh_model *plvl_model;
+	/** Pointer to the model entry of the Setup Server. */
+	struct bt_mesh_model *plvl_setup_model;
 	/** Model publication parameters. */
 	struct bt_mesh_model_pub pub;
+	/* Publication buffer */
+	struct net_buf_simple pub_buf;
+	/* Publication data */
+	uint8_t pub_data[BT_MESH_MODEL_BUF_LEN(
+		BT_MESH_PLVL_OP_LEVEL_STATUS,
+		BT_MESH_PLVL_MSG_MAXLEN_LEVEL_STATUS)];
 	/** Transaction ID tracker for the set messages. */
 	struct bt_mesh_tid_ctx tid;
 	/** User handler functions. */
 	const struct bt_mesh_plvl_srv_handlers *const handlers;
 
+#if CONFIG_BT_SETTINGS
+	/** Storage timer */
+	struct k_work_delayable store_timer;
+#endif
 	/** Current Power Range. */
 	struct bt_mesh_plvl_range range;
 	/** Current Default Power. */
-	u16_t default_power;
+	uint16_t default_power;
 	/** The last known Power Level. */
-	u16_t last;
+	uint16_t last;
 	/** Whether the Power is on. */
 	bool is_on;
 };
@@ -165,8 +179,8 @@ struct bt_mesh_plvl_srv {
  * Publishes a Generic Power Level status message with the configured publish
  * parameters, or using the given message context.
  *
- * @note This API is only used publishing unprompted status messages. Response
- * messages for get and set messages are handled internally.
+ * @note This API is only used for publishing unprompted status messages.
+ * Response messages for get and set messages are handled internally.
  *
  * @param[in] srv Server instance to publish with.
  * @param[in] ctx Message context, or NULL to publish with the configured
@@ -174,8 +188,6 @@ struct bt_mesh_plvl_srv {
  * @param[in] status Status to publish.
  *
  * @return 0 Successfully published the current Power state.
- * @retval -ENOTSUP A message context was not provided and publishing is not
- * supported.
  * @retval -EADDRNOTAVAIL A message context was not provided and publishing is
  * not configured.
  * @retval -EAGAIN The device has not been provisioned.
@@ -186,11 +198,11 @@ int bt_mesh_plvl_srv_pub(struct bt_mesh_plvl_srv *srv,
 
 /** @cond INTERNAL_HIDDEN */
 extern const struct bt_mesh_model_cb _bt_mesh_plvl_srv_cb;
+extern const struct bt_mesh_model_cb _bt_mesh_plvl_setup_srv_cb;
 extern const struct bt_mesh_model_op _bt_mesh_plvl_srv_op[];
 extern const struct bt_mesh_model_op _bt_mesh_plvl_setup_srv_op[];
 extern const struct bt_mesh_lvl_srv_handlers bt_mesh_plvl_srv_lvl_handlers;
 extern const struct bt_mesh_onoff_srv_handlers bt_mesh_plvl_srv_onoff_handlers;
-int _bt_mesh_plvl_srv_update_handler(struct bt_mesh_model *model);
 /** @endcond */
 
 #ifdef __cplusplus

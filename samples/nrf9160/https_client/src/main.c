@@ -1,25 +1,25 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <string.h>
 #include <zephyr.h>
 #include <stdlib.h>
 #include <net/socket.h>
-#include <net/bsdlib.h>
+#include <modem/nrf_modem_lib.h>
 #include <net/tls_credentials.h>
-#include <lte_lc.h>
-#include <at_cmd.h>
-#include <at_notif.h>
-#include <modem_key_mgmt.h>
+#include <modem/lte_lc.h>
+#include <modem/modem_key_mgmt.h>
 
 #define HTTPS_PORT 443
 
+#define HTTPS_HOSTNAME "example.com"
+
 #define HTTP_HEAD                                                              \
 	"HEAD / HTTP/1.1\r\n"                                                  \
-	"Host: www.google.com:443\r\n"                                         \
+	"Host: " HTTPS_HOSTNAME ":443\r\n"                                     \
 	"Connection: close\r\n\r\n"
 
 #define HTTP_HEAD_LEN (sizeof(HTTP_HEAD) - 1)
@@ -32,58 +32,44 @@
 static const char send_buf[] = HTTP_HEAD;
 static char recv_buf[RECV_BUF_SIZE];
 
-/* Certificate for `google.com` */
+/* Certificate for `example.com` */
 static const char cert[] = {
-	#include "../cert/GlobalSign-Root-CA-R2"
+	#include "../cert/DigiCertGlobalRootCA.pem"
 };
 
-BUILD_ASSERT_MSG(sizeof(cert) < KB(4), "Certificate too large");
-
-
-/* Initialize AT communications */
-int at_comms_init(void)
-{
-	int err;
-
-	err = at_cmd_init();
-	if (err) {
-		printk("Failed to initialize AT commands, err %d\n", err);
-		return err;
-	}
-
-	err = at_notif_init();
-	if (err) {
-		printk("Failed to initialize AT notifications, err %d\n", err);
-		return err;
-	}
-
-	return 0;
-}
+BUILD_ASSERT(sizeof(cert) < KB(4), "Certificate too large");
 
 /* Provision certificate to modem */
 int cert_provision(void)
 {
 	int err;
 	bool exists;
-	u8_t unused;
+	int mismatch;
 
-	err = modem_key_mgmt_exists(TLS_SEC_TAG,
-				    MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
-				    &exists, &unused);
+	/* It may be sufficient for you application to check whether the correct
+	 * certificate is provisioned with a given tag directly using modem_key_mgmt_cmp().
+	 * Here, for the sake of the completeness, we check that a certificate exists
+	 * before comparing it with what we expect it to be.
+	 */
+	err = modem_key_mgmt_exists(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN, &exists);
 	if (err) {
 		printk("Failed to check for certificates err %d\n", err);
 		return err;
 	}
 
 	if (exists) {
-		/* For the sake of simplicity we delete what is provisioned
-		 * with our security tag and reprovision our certificate.
-		 */
-		err = modem_key_mgmt_delete(TLS_SEC_TAG,
-					    MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN);
+		mismatch = modem_key_mgmt_cmp(TLS_SEC_TAG,
+					      MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN,
+					      cert, strlen(cert));
+		if (!mismatch) {
+			printk("Certificate match\n");
+			return 0;
+		}
+
+		printk("Certificate mismatch\n");
+		err = modem_key_mgmt_delete(TLS_SEC_TAG, MODEM_KEY_MGMT_CRED_TYPE_CA_CHAIN);
 		if (err) {
-			printk("Failed to delete existing certificate, err %d\n",
-			       err);
+			printk("Failed to delete existing certificate, err %d\n", err);
 		}
 	}
 
@@ -112,6 +98,13 @@ int tls_setup(int fd)
 		TLS_SEC_TAG,
 	};
 
+#if defined(CONFIG_SAMPLE_TFM_MBEDTLS)
+	err = tls_credential_add(tls_sec_tag[0], TLS_CREDENTIAL_CA_CERTIFICATE, cert, sizeof(cert));
+	if (err) {
+		return err;
+	}
+#endif
+
 	/* Set up TLS peer verification */
 	enum {
 		NONE = 0,
@@ -137,6 +130,11 @@ int tls_setup(int fd)
 		return err;
 	}
 
+	err = setsockopt(fd, SOL_TLS, TLS_HOSTNAME, HTTPS_HOSTNAME, sizeof(HTTPS_HOSTNAME) - 1);
+	if (err) {
+		printk("Failed to setup TLS hostname, err %d\n", errno);
+		return err;
+	}
 	return 0;
 }
 
@@ -155,23 +153,13 @@ void main(void)
 
 	printk("HTTPS client sample started\n\r");
 
-	err = bsdlib_init();
-	if (err) {
-		printk("Failed to initialize bsdlib!");
-		return;
-	}
-
-	/* Initialize AT comms in order to provision the certificate */
-	err = at_comms_init();
-	if (err) {
-		return;
-	}
-
+#if !defined(CONFIG_SAMPLE_TFM_MBEDTLS)
 	/* Provision certificates before connecting to the LTE network */
 	err = cert_provision();
 	if (err) {
 		return;
 	}
+#endif
 
 	printk("Waiting for network.. ");
 	err = lte_lc_init_and_connect();
@@ -181,7 +169,7 @@ void main(void)
 	}
 	printk("OK\n");
 
-	err = getaddrinfo("google.com", NULL, &hints, &res);
+	err = getaddrinfo(HTTPS_HOSTNAME, NULL, &hints, &res);
 	if (err) {
 		printk("getaddrinfo() failed, err %d\n", errno);
 		return;
@@ -189,7 +177,11 @@ void main(void)
 
 	((struct sockaddr_in *)res->ai_addr)->sin_port = htons(HTTPS_PORT);
 
-	fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
+	if (IS_ENABLED(CONFIG_SAMPLE_TFM_MBEDTLS)) {
+		fd = socket(AF_INET, SOCK_STREAM | SOCK_NATIVE_TLS, IPPROTO_TLS_1_2);
+	} else {
+		fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TLS_1_2);
+	}
 	if (fd == -1) {
 		printk("Failed to open socket!\n");
 		goto clean_up;
@@ -201,7 +193,7 @@ void main(void)
 		goto clean_up;
 	}
 
-	printk("Connecting to %s\n", "google.com");
+	printk("Connecting to %s\n", HTTPS_HOSTNAME);
 	err = connect(fd, res->ai_addr, sizeof(struct sockaddr_in));
 	if (err) {
 		printk("connect() failed, err: %d\n", errno);
@@ -245,4 +237,6 @@ void main(void)
 clean_up:
 	freeaddrinfo(res);
 	(void)close(fd);
+
+	lte_lc_power_off();
 }

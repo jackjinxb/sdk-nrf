@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -19,14 +19,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** @cond INTERNAL_HIDDEN */
-#define BT_MESH_BATTERY_OP_GET BT_MESH_MODEL_OP_2(0x82, 0x23)
-#define BT_MESH_BATTERY_OP_STATUS BT_MESH_MODEL_OP_2(0x82, 0x24)
-
-#define BT_MESH_BATTERY_MSG_LEN_GET 0
-#define BT_MESH_BATTERY_MSG_LEN_STATUS 8
-/** @endcond */
 
 /** Unknown battery level. */
 #define BT_MESH_BATTERY_LVL_UNKNOWN 0xff
@@ -89,11 +81,11 @@ struct bt_mesh_battery_status {
 	 * Current battery level in percent, or
 	 * @ref BT_MESH_BATTERY_LVL_UNKNOWN.
 	 */
-	u8_t battery_lvl;
+	uint8_t battery_lvl;
 	/** Minutes until discharged, or @ref BT_MESH_BATTERY_TIME_UNKNOWN. */
-	u32_t discharge_minutes;
+	uint32_t discharge_minutes;
 	/** Minutes until discharged, or @ref BT_MESH_BATTERY_TIME_UNKNOWN. */
-	u32_t charge_minutes;
+	uint32_t charge_minutes;
 	/** Presence state. */
 	enum bt_mesh_battery_presence presence;
 	/** Charge level indicator. */
@@ -103,6 +95,14 @@ struct bt_mesh_battery_status {
 	/** Service state. */
 	enum bt_mesh_battery_service service;
 };
+
+/** @cond INTERNAL_HIDDEN */
+#define BT_MESH_BATTERY_OP_GET BT_MESH_MODEL_OP_2(0x82, 0x23)
+#define BT_MESH_BATTERY_OP_STATUS BT_MESH_MODEL_OP_2(0x82, 0x24)
+
+#define BT_MESH_BATTERY_MSG_LEN_GET 0
+#define BT_MESH_BATTERY_MSG_LEN_STATUS 8
+/** @endcond */
 
 #ifdef __cplusplus
 }

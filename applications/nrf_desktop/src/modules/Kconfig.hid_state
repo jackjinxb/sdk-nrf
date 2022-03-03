@@ -1,23 +1,40 @@
 #
 # Copyright (c) 2018 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menu "HID State"
 
-config DESKTOP_REPORT_DESC
-	string "HID report descriptor"
-	default ""
-	help
-	  This option specifies a path to the HID report descriptor file.
-
 config DESKTOP_HID_STATE_ENABLE
 	bool "Enable HID state"
+	depends on BT_PERIPHERAL
 	help
 	  HID events processing module.
 
 if DESKTOP_HID_STATE_ENABLE
+
+config DESKTOP_HID_STATE_HID_KEYMAP_DEF_PATH
+	string "File defining HID keymap"
+	default "hid_keymap_def.h"
+	help
+	  Location of configuration file that holds information about mapping
+	  between buttons and generated reports.
+
+config DESKTOP_HID_STATE_HID_KEYBOARD_LEDS_DEF_PATH
+	string "File defining HID keyboard LEDs"
+	default "hid_keyboard_leds_def.h"
+	help
+	  Location of configuration file that holds information about LEDs
+	  associated with HID keyboard LEDs report.
+
+config DESKTOP_HID_STATE_PM_ENABLE
+	bool "Enable HID power manager integration"
+	depends on CAF_POWER_MANAGER
+	select CAF_KEEP_ALIVE_EVENTS
+	default y
+	help
+	  This enables small module that blocks power down if HID is active.
 
 config DESKTOP_HID_REPORT_EXPIRATION
 	int "HID report expiration [ms]"
@@ -30,6 +47,8 @@ config DESKTOP_HID_EVENT_QUEUE_SIZE
 	int "HID event queue size"
 	default 12
 	range 2 255
+	help
+	  Size of the HID event queue.
 
 module = DESKTOP_HID_STATE
 module-str = HID state

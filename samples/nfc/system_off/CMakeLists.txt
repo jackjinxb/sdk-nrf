@@ -1,19 +1,12 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
-cmake_minimum_required(VERSION 3.8.2)
+cmake_minimum_required(VERSION 3.20.0)
 
-set(NRF_SUPPORTED_BOARDS
-  nrf52_pca10040
-  nrf52840_pca10056
-  nrf5340_dk_nrf5340_cpuapp
-  )
-
-include($ENV{ZEPHYR_BASE}/../nrf/cmake/boilerplate.cmake)
-include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(NONE)
 
 FILE(GLOB app_sources src/*.c)

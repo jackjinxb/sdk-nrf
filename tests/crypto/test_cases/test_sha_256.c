@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -23,7 +23,12 @@ extern test_vector_hash_t __stop_test_vector_hash_256_data[];
 extern test_vector_hash_t __start_test_vector_hash_256_long_data[];
 extern test_vector_hash_t __stop_test_vector_hash_256_long_data[];
 
+#if defined(CONFIG_CRYPTO_TEST_LARGE_VECTORS)
 #define INPUT_BUF_SIZE (4125)
+#else
+#define INPUT_BUF_SIZE (512)
+#endif /* CRYPTO_TEST_LARGE_VECTORS */
+
 #define OUTPUT_BUF_SIZE (64)
 
 static mbedtls_sha256_context sha256_context;
@@ -40,6 +45,10 @@ static size_t in_len;
 static size_t out_len;
 static size_t expected_out_len;
 
+void sha_256_clear_buffers(void);
+void unhexify_sha_256(void);
+void unhexify_sha_256_long(void);
+
 void sha_256_clear_buffers(void)
 {
 	memset(m_sha_input_buf, 0x00, sizeof(m_sha_input_buf));
@@ -48,54 +57,53 @@ void sha_256_clear_buffers(void)
 	       sizeof(m_sha_expected_output_buf));
 }
 
-__attribute__((noinline)) static void unhexify_sha(void)
-{
-	/* Fetch and unhexify test vectors. */
-	in_len = hex2bin(p_test_vector->p_input, strlen(p_test_vector->p_input),
-			 m_sha_input_buf, strlen(p_test_vector->p_input));
-	expected_out_len = hex2bin(p_test_vector->p_expected_output,
-				   strlen(p_test_vector->p_expected_output),
-				   m_sha_expected_output_buf,
-				   strlen(p_test_vector->p_expected_output));
-	out_len = expected_out_len;
-}
-
-__attribute__((noinline)) static void unhexify_sha_long(void)
-{
-	/* Fetch and unhexify test vectors. */
-	in_len = p_test_vector->chunk_length;
-	expected_out_len = hex2bin(p_test_vector->p_expected_output,
-				   strlen(p_test_vector->p_expected_output),
-				   m_sha_expected_output_buf,
-				   strlen(p_test_vector->p_expected_output));
-	out_len = expected_out_len;
-	memcpy(m_sha_input_buf, p_test_vector->p_input, in_len);
-}
-
-void sha_256_setup(void)
+static void sha_256_setup(void)
 {
 	sha_256_clear_buffers();
 	p_test_vector = ITEM_GET(test_vector_hash_256_data, test_vector_hash_t,
 				 sha_vector_n);
-	unhexify_sha();
+	unhexify_sha_256();
 }
 
-void sha_256_teardown(void)
+static void sha_256_teardown(void)
 {
 	sha_vector_n++;
 }
 
-void sha_256_long_setup(void)
+static void sha_256_long_setup(void)
 {
 	sha_256_clear_buffers();
 	p_test_vector = ITEM_GET(test_vector_hash_256_long_data,
 				 test_vector_hash_t, sha_long_vector_n);
-	unhexify_sha_long();
+	unhexify_sha_256_long();
 }
 
-void sha_256_long_teardown(void)
+static void sha_256_long_teardown(void)
 {
 	sha_long_vector_n++;
+}
+
+__attribute__((noinline)) void unhexify_sha_256(void)
+{
+	/* Fetch and unhexify test vectors. */
+	in_len = hex2bin_safe(p_test_vector->p_input,
+			      m_sha_input_buf,
+			      sizeof(m_sha_input_buf));
+	expected_out_len = hex2bin_safe(p_test_vector->p_expected_output,
+					m_sha_expected_output_buf,
+					sizeof(m_sha_expected_output_buf));
+	out_len = expected_out_len;
+}
+
+__attribute__((noinline)) void unhexify_sha_256_long(void)
+{
+	/* Fetch and unhexify test vectors. */
+	in_len = p_test_vector->chunk_length;
+	expected_out_len = hex2bin_safe(p_test_vector->p_expected_output,
+					m_sha_expected_output_buf,
+					sizeof(m_sha_expected_output_buf));
+	out_len = expected_out_len;
+	memcpy(m_sha_input_buf, p_test_vector->p_input, in_len);
 }
 
 /**@brief Function encapsulating sha256 execution steps.
@@ -105,12 +113,12 @@ static int exec_sha256(test_vector_hash_t *p_test_vector, int in_len,
 		       bool is_long)
 {
 	mbedtls_sha256_init(&sha256_context);
-	int err_code = mbedtls_sha256_starts_ret(&sha256_context, false);
+	int err_code = mbedtls_sha256_starts(&sha256_context, false);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
 	/* Update the hash. */
 	if (!is_long) {
-		err_code = mbedtls_sha256_update_ret(&sha256_context,
+		err_code = mbedtls_sha256_update(&sha256_context,
 						     m_sha_input_buf, in_len);
 	} else {
 		/* Update the hash until all input data is processed. */
@@ -121,7 +129,7 @@ static int exec_sha256(test_vector_hash_t *p_test_vector, int in_len,
 				       4096);
 			}
 
-			err_code = mbedtls_sha256_update_ret(
+			err_code = mbedtls_sha256_update(
 				&sha256_context, m_sha_input_buf, in_len);
 			TEST_VECTOR_ASSERT_EQUAL(
 				p_test_vector->expected_err_code, err_code);
@@ -131,7 +139,7 @@ static int exec_sha256(test_vector_hash_t *p_test_vector, int in_len,
 	TEST_VECTOR_ASSERT_EQUAL(p_test_vector->expected_err_code, err_code);
 
 	/* Finalize the hash. */
-	return mbedtls_sha256_finish_ret(&sha256_context, m_sha_output_buf);
+	return mbedtls_sha256_finish(&sha256_context, m_sha_output_buf);
 }
 
 /**@brief Function for verifying the SHA digest of messages.
@@ -155,7 +163,7 @@ void exec_test_case_sha_256(void)
 				  "Incorrect hash");
 
 	/* Do the same in a single step */
-	err_code = mbedtls_sha256_ret(m_sha_input_buf, in_len, m_sha_output_buf,
+	err_code = mbedtls_sha256(m_sha_input_buf, in_len, m_sha_output_buf,
 				      false);
 
 	TEST_VECTOR_ASSERT_EQUAL(p_test_vector->expected_err_code, err_code);

@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -42,13 +42,19 @@ extern test_vector_aead_t __stop_test_vector_aead_chachapoly_simple_data[];
 #define AEAD_PLAINTEXT_BUF_SIZE_PLUS                                           \
 	(AEAD_PLAINTEXT_BUF_SIZE + NUM_BUFFER_OVERFLOW_TEST_BYTES)
 #define AEAD_MAX_MAC_SIZE_PLUS (AEAD_MAC_SIZE + NUM_BUFFER_OVERFLOW_TEST_BYTES)
+#define AEAD_CIPHERTEXT_BUF_SIZE_PLUS (AEAD_PLAINTEXT_BUF_SIZE + AEAD_MAC_SIZE \
+					+ NUM_BUFFER_OVERFLOW_TEST_BYTES)
 
 #define AEAD_KEY_SIZE_BITS (256)
 #define AEAD_KEY_SIZE (AEAD_KEY_SIZE_BITS / 8)
 
-static uint8_t m_aead_input_buf[AEAD_PLAINTEXT_BUF_SIZE];
-static uint8_t m_aead_output_buf[AEAD_PLAINTEXT_BUF_SIZE_PLUS];
-static uint8_t m_aead_expected_output_buf[AEAD_PLAINTEXT_BUF_SIZE];
+/*
+ * For buffers holding crypt results, generally use a size which
+ * may hold a MAC appended as well
+ */
+static uint8_t m_aead_input_buf[AEAD_CIPHERTEXT_BUF_SIZE_PLUS];
+static uint8_t m_aead_output_buf[AEAD_CIPHERTEXT_BUF_SIZE_PLUS];
+static uint8_t m_aead_expected_output_buf[AEAD_CIPHERTEXT_BUF_SIZE_PLUS];
 static uint8_t m_aead_output_mac_buf[AEAD_MAX_MAC_SIZE_PLUS];
 static uint8_t m_aead_expected_mac_buf[AEAD_MAX_MAC_SIZE_PLUS];
 static uint8_t m_aead_key_buf[AEAD_KEY_SIZE];
@@ -68,66 +74,10 @@ static size_t nonce_len;
 static size_t input_len;
 static size_t output_len;
 
-void aead_clear_buffers(void)
-{
-	memset(m_aead_input_buf, 0xFF, sizeof(m_aead_input_buf));
-	memset(m_aead_output_buf, 0xFF, sizeof(m_aead_output_buf));
-	memset(m_aead_expected_output_buf, 0xFF,
-	       sizeof(m_aead_expected_output_buf));
-	memset(m_aead_output_mac_buf, 0xFF, sizeof(m_aead_output_mac_buf));
-	memset(m_aead_expected_mac_buf, 0xFF, sizeof(m_aead_expected_mac_buf));
-	memset(m_aead_key_buf, 0x00, sizeof(m_aead_key_buf));
-	memset(m_aead_ad_buf, 0x00, sizeof(m_aead_ad_buf));
-	memset(m_aead_nonce_buf, 0x00, sizeof(m_aead_nonce_buf));
-}
+void aead_clear_buffers(void);
+void unhexify_aead(void);
 
-__attribute__((noinline)) void unhexify_aead(void)
-{
-	bool encrypt =
-		(p_test_vector->direction == MBEDTLS_ENCRYPT) && g_encrypt;
-
-	key_len = hex2bin(p_test_vector->p_key, strlen(p_test_vector->p_key),
-			  m_aead_key_buf, strlen(p_test_vector->p_key));
-	mac_len =
-		hex2bin(p_test_vector->p_mac, strlen(p_test_vector->p_mac),
-			m_aead_expected_mac_buf, strlen(p_test_vector->p_mac));
-	ad_len = hex2bin(p_test_vector->p_ad, strlen(p_test_vector->p_ad),
-			 m_aead_ad_buf, strlen(p_test_vector->p_ad));
-	nonce_len =
-		hex2bin(p_test_vector->p_nonce, strlen(p_test_vector->p_nonce),
-			m_aead_nonce_buf, strlen(p_test_vector->p_nonce));
-
-	/* Fetch and unhexify plaintext and ciphertext for encryption. */
-	if (encrypt) {
-		input_len = hex2bin(p_test_vector->p_plaintext,
-				    strlen(p_test_vector->p_plaintext),
-				    m_aead_input_buf,
-				    strlen(p_test_vector->p_plaintext));
-		output_len = hex2bin(p_test_vector->p_ciphertext,
-				     strlen(p_test_vector->p_ciphertext),
-				     m_aead_expected_output_buf,
-				     strlen(p_test_vector->p_ciphertext));
-		mac_len = hex2bin(p_test_vector->p_mac,
-				  strlen(p_test_vector->p_mac),
-				  m_aead_expected_mac_buf,
-				  strlen(p_test_vector->p_mac));
-	} else {
-		input_len = hex2bin(p_test_vector->p_ciphertext,
-				    strlen(p_test_vector->p_ciphertext),
-				    m_aead_input_buf,
-				    strlen(p_test_vector->p_ciphertext));
-		output_len = hex2bin(p_test_vector->p_plaintext,
-				     strlen(p_test_vector->p_plaintext),
-				     m_aead_expected_output_buf,
-				     strlen(p_test_vector->p_plaintext));
-		mac_len = hex2bin(p_test_vector->p_mac,
-				  strlen(p_test_vector->p_mac),
-				  m_aead_output_mac_buf,
-				  strlen(p_test_vector->p_mac));
-	}
-}
-
-void aead_ccm_setup(void)
+static void aead_ccm_setup(void)
 {
 	aead_clear_buffers();
 
@@ -138,7 +88,7 @@ void aead_ccm_setup(void)
 	unhexify_aead();
 }
 
-void aead_gcm_setup(void)
+static void aead_gcm_setup(void)
 {
 	aead_clear_buffers();
 
@@ -149,7 +99,7 @@ void aead_gcm_setup(void)
 	unhexify_aead();
 }
 
-void aead_chachapoly_setup(void)
+static void aead_chachapoly_setup(void)
 {
 	aead_clear_buffers();
 
@@ -160,7 +110,7 @@ void aead_chachapoly_setup(void)
 	unhexify_aead();
 }
 
-void aead_ccm_setup_simple(void)
+static void aead_ccm_setup_simple(void)
 {
 	aead_clear_buffers();
 
@@ -171,7 +121,7 @@ void aead_ccm_setup_simple(void)
 	unhexify_aead();
 }
 
-void aead_gcm_setup_simple(void)
+static void aead_gcm_setup_simple(void)
 {
 	aead_clear_buffers();
 
@@ -182,7 +132,7 @@ void aead_gcm_setup_simple(void)
 	unhexify_aead();
 }
 
-void aead_chachapoly_setup_simple(void)
+static void aead_chachapoly_setup_simple(void)
 {
 	aead_clear_buffers();
 
@@ -193,7 +143,69 @@ void aead_chachapoly_setup_simple(void)
 	unhexify_aead();
 }
 
-#if defined(CONFIG_MBEDTLS_CCM_C)
+void aead_clear_buffers(void)
+{
+	memset(m_aead_input_buf, 0xFF, sizeof(m_aead_input_buf));
+	memset(m_aead_output_buf, 0xFF, sizeof(m_aead_output_buf));
+	memset(m_aead_output_mac_buf, 0xFF, sizeof(m_aead_output_mac_buf));
+	memset(m_aead_expected_output_buf, 0x00,
+	       sizeof(m_aead_expected_output_buf));
+	memset(m_aead_expected_mac_buf, 0x00, sizeof(m_aead_expected_mac_buf));
+	memset(m_aead_key_buf, 0x00, sizeof(m_aead_key_buf));
+	memset(m_aead_ad_buf, 0x00, sizeof(m_aead_ad_buf));
+	memset(m_aead_nonce_buf, 0x00, sizeof(m_aead_nonce_buf));
+}
+
+__attribute__((noinline)) void unhexify_aead(void)
+{
+	bool encrypt =
+		(p_test_vector->direction == MBEDTLS_ENCRYPT) && g_encrypt;
+
+	key_len = hex2bin_safe(p_test_vector->p_key,
+			       m_aead_key_buf,
+			       sizeof(m_aead_key_buf));
+	mac_len = hex2bin_safe(p_test_vector->p_mac,
+			       m_aead_expected_mac_buf,
+			       sizeof(m_aead_expected_mac_buf));
+	ad_len = hex2bin_safe(p_test_vector->p_ad,
+			      m_aead_ad_buf,
+			      sizeof(m_aead_ad_buf));
+	nonce_len = hex2bin_safe(p_test_vector->p_nonce,
+				 m_aead_nonce_buf,
+				 sizeof(m_aead_nonce_buf));
+
+	/*
+	 * Place mac in expected buf both for use in encrypt (verification)
+	 * and for decrypt (as input)
+	 */
+	mac_len = hex2bin_safe(p_test_vector->p_mac,
+					m_aead_expected_mac_buf,
+					sizeof(m_aead_expected_mac_buf));
+
+	/* Fetch and unhexify plaintext and ciphertext for encryption. */
+	if (encrypt) {
+		input_len = hex2bin_safe(p_test_vector->p_plaintext,
+					 m_aead_input_buf,
+					 sizeof(m_aead_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					  m_aead_expected_output_buf,
+					  sizeof(m_aead_expected_output_buf));
+	} else {
+		input_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					 m_aead_input_buf,
+					 sizeof(m_aead_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_plaintext,
+					  m_aead_expected_output_buf,
+					  sizeof(m_aead_expected_output_buf));
+
+		/* Some APIs need the mac to reside directly after the ciphertext */
+		hex2bin_safe(p_test_vector->p_mac,
+				       m_aead_input_buf + input_len,
+				       sizeof(m_aead_input_buf) - input_len);
+	}
+}
+
+#if defined(MBEDTLS_CCM_C)
 void exec_test_case_aead_ccm_star_simple(void)
 {
 	int err_code = -1;
@@ -265,6 +277,7 @@ void exec_test_case_aead_ccm_star(void)
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
 	size_t operation_len = output_len;
+
 	start_time_measurement();
 	err_code = mbedtls_ccm_star_encrypt_and_tag(
 		&ctx, input_len, m_aead_nonce_buf, nonce_len, m_aead_ad_buf,
@@ -302,10 +315,11 @@ void exec_test_case_aead_ccm_star(void)
 	LOG_DBG("Err code setkey: %d", err_code);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
+	// input_len -= mac_len;
 	err_code = mbedtls_ccm_star_auth_decrypt(
 		&ctx, input_len, m_aead_nonce_buf, nonce_len, m_aead_ad_buf,
 		ad_len, m_aead_input_buf, m_aead_output_buf,
-		m_aead_output_mac_buf, mac_len);
+		m_aead_expected_mac_buf, mac_len);
 
 	LOG_DBG("Err code %s: -0x%04X, operation len: %d", "decrypt", -err_code,
 		operation_len);
@@ -334,7 +348,7 @@ void exec_test_case_aead(void)
 {
 	int err_code = -1;
 
-#if defined(CONFIG_MBEDTLS_CCM_C)
+#if defined(MBEDTLS_CCM_C)
 	if (p_test_vector->mode == MBEDTLS_MODE_CCM &&
 	    p_test_vector->ccm_star) {
 		exec_test_case_aead_ccm_star();
@@ -368,12 +382,12 @@ void exec_test_case_aead(void)
 	LOG_DBG("Err code setkey: %d", err_code);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
-	size_t operation_len = output_len;
+	size_t operation_len = 0;
 	start_time_measurement();
-	err_code = mbedtls_cipher_auth_encrypt(
+	err_code = mbedtls_cipher_auth_encrypt_ext(
 		&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf, ad_len,
-		m_aead_input_buf, input_len, m_aead_output_buf, &operation_len,
-		m_aead_output_mac_buf, mac_len);
+		m_aead_input_buf, input_len, m_aead_output_buf, AEAD_CIPHERTEXT_BUF_SIZE_PLUS,
+		&operation_len, mac_len);
 	stop_time_measurement();
 
 	LOG_DBG("Err code %s: -0x%04X, operation len: %d",
@@ -381,20 +395,21 @@ void exec_test_case_aead(void)
 		operation_len);
 	TEST_VECTOR_ASSERT_EQUAL(p_test_vector->expected_err_code, err_code);
 
+	/* The MAC is appended after the ciphertext. */
+	uint8_t *mac = m_aead_output_buf + operation_len - mac_len;
+
 	TEST_VECTOR_MEMCMP_ASSERT(m_aead_expected_output_buf, m_aead_output_buf,
 				  output_len,
 				  p_test_vector->crypt_expected_result,
 				  "Output buf check");
 	TEST_VECTOR_MEMCMP_ASSERT(m_aead_expected_mac_buf,
-				  m_aead_output_mac_buf, mac_len,
+				  mac, mac_len,
 				  p_test_vector->mac_expected_result,
 				  "MAC buf check");
 
 	/* Overflow checks */
-	TEST_VECTOR_OVERFLOW_ASSERT(m_aead_output_buf, output_len,
+	TEST_VECTOR_OVERFLOW_ASSERT(m_aead_output_buf, operation_len,
 				    "output buffer overflow");
-	TEST_VECTOR_OVERFLOW_ASSERT(m_aead_output_mac_buf, mac_len,
-				    "MAC buffer overflow");
 
 	/* Decrypt part. */
 	aead_clear_buffers();
@@ -407,10 +422,17 @@ void exec_test_case_aead(void)
 	LOG_DBG("Err code setkey: %d", err_code);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
-	err_code = mbedtls_cipher_auth_decrypt(
+	/*
+	 * Feed the length of the previous operation into the decrypt.
+	 * This length includes both the ciphertext and the mac.
+	 */
+	size_t encrypt_operation_len = operation_len;
+
+	err_code = mbedtls_cipher_auth_decrypt_ext(
 		&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf, ad_len,
-		m_aead_input_buf, input_len, m_aead_output_buf, &operation_len,
-		m_aead_output_mac_buf, mac_len);
+		m_aead_input_buf, encrypt_operation_len, m_aead_output_buf,
+		AEAD_CIPHERTEXT_BUF_SIZE_PLUS, &operation_len,
+		mac_len);
 
 	LOG_DBG("Err code %s: -0x%04X, operation len: %d", "decrypt", -err_code,
 		operation_len);
@@ -424,8 +446,6 @@ void exec_test_case_aead(void)
 	/* Overflow checks */
 	TEST_VECTOR_OVERFLOW_ASSERT(m_aead_output_buf, output_len,
 				    "output buffer overflow");
-	TEST_VECTOR_OVERFLOW_ASSERT(m_aead_output_mac_buf, mac_len,
-				    "MAC buffer overflow");
 
 	/* Free resources. */
 	mbedtls_cipher_free(&ctx);
@@ -438,7 +458,7 @@ void exec_test_case_aead_simple(void)
 {
 	int err_code = -1;
 
-#if defined(CONFIG_MBEDTLS_CCM_C)
+#if defined(MBEDTLS_CCM_C)
 	if (p_test_vector->mode == MBEDTLS_MODE_CCM &&
 	    p_test_vector->ccm_star) {
 		exec_test_case_aead_ccm_star_simple();
@@ -466,18 +486,22 @@ void exec_test_case_aead_simple(void)
 	LOG_DBG("Err code setkey: -0x%04X", -err_code);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
 
-	size_t operation_len = output_len;
+	LOG_DBG("Expected err code: -0x%04X", -p_test_vector->expected_err_code);
+
+	size_t operation_len = 0;
 	start_time_measurement();
 	if (p_test_vector->direction == MBEDTLS_ENCRYPT) {
-		err_code = mbedtls_cipher_auth_encrypt(
-			&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf,
-			ad_len, m_aead_input_buf, input_len, m_aead_output_buf,
-			&operation_len, m_aead_output_mac_buf, mac_len);
+		err_code = mbedtls_cipher_auth_encrypt_ext(
+			&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf, ad_len,
+			m_aead_input_buf, input_len, m_aead_output_buf,
+			AEAD_CIPHERTEXT_BUF_SIZE_PLUS, &operation_len, mac_len);
 	} else {
-		err_code = mbedtls_cipher_auth_decrypt(
-			&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf,
-			ad_len, m_aead_input_buf, input_len, m_aead_output_buf,
-			&operation_len, m_aead_output_mac_buf, mac_len);
+		/* MAC has been appended to input. */
+		input_len += mac_len;
+		err_code = mbedtls_cipher_auth_decrypt_ext(
+			&ctx, m_aead_nonce_buf, nonce_len, m_aead_ad_buf, ad_len,
+			m_aead_input_buf, input_len, m_aead_output_buf,
+			AEAD_CIPHERTEXT_BUF_SIZE_PLUS, &operation_len, mac_len);
 	}
 
 	stop_time_measurement();
@@ -487,15 +511,17 @@ void exec_test_case_aead_simple(void)
 		operation_len);
 	TEST_VECTOR_ASSERT_EQUAL(p_test_vector->expected_err_code, err_code);
 
-	if (input_len != 0) {
+	if (input_len != 0 && output_len != 0) {
 		TEST_VECTOR_MEMCMP_ASSERT(m_aead_expected_output_buf,
 					  m_aead_output_buf, output_len,
 					  p_test_vector->crypt_expected_result,
 					  "Output buf check");
 	}
 	if (p_test_vector->direction == MBEDTLS_ENCRYPT) {
+		/* The MAC is appended after the ciphertext. */
+		uint8_t *mac = m_aead_output_buf + operation_len - mac_len;
 		TEST_VECTOR_MEMCMP_ASSERT(m_aead_expected_mac_buf,
-					  m_aead_output_mac_buf, mac_len,
+					  mac, mac_len,
 					  p_test_vector->mac_expected_result,
 					  "MAC buf check");
 	}

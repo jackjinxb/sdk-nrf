@@ -3,28 +3,34 @@
 nRF9160: AT Client
 ##################
 
+.. contents::
+   :local:
+   :depth: 2
+
 The AT Client sample demonstrates the asynchronous serial communication taking place over UART to the nRF9160 modem.
 The sample enables you to use an external computer or MCU to send AT commands to the LTE-M/NB-IoT modem of your nRF9160 device.
-
-Overview
-********
-
-The AT Client sample acts as a proxy for sending directives to the nRF9160 modem via AT commands.
-This facilitates the reading of responses or analyzing of events related to the nRF9160 modem.
-The commands can be initiated from a terminal or the `LTE Link Monitor`_, which is an application implemented as part of `nRF Connect for Desktop`_.
-
-For more information on the AT commands, see the `AT Commands Reference Guide`_.
-
-
 
 Requirements
 ************
 
-* The following development board:
+The sample supports the following development kit:
 
-  * |nRF9160DK|
+.. table-from-rows:: /includes/sample_board_rows.txt
+   :header: heading
+   :rows: nrf9160dk_nrf9160_ns
 
-* .. include:: /includes/spm.txt
+.. include:: /includes/spm.txt
+
+
+Overview
+********
+
+The AT Client sample acts as a proxy for sending directives to the nRF9160 modem using AT commands.
+This facilitates the reading of responses or analyzing of events related to the nRF9160 modem.
+You can initiate the commands from a terminal or the `LTE Link Monitor`_, which is an application implemented as part of `nRF Connect for Desktop`_.
+
+For more information on the AT commands, see the `AT Commands Reference Guide`_.
+
 
 Building and running
 ********************
@@ -37,17 +43,17 @@ Building and running
 Testing
 =======
 
-After programming the sample to your board, test the sample by performing the following steps:
+After programming the sample to your development kit, test it by performing the following steps:
 
-1. Press the reset button on the nRF9160 DK to reboot the board and start the AT Client sample.
-#. :ref:`Connect to the nRF9160 DK board with LTE Link Monitor<lte_connect>`.
+1. Press the reset button on the nRF9160 DK to reboot the kit and start the AT Client sample.
+#. :ref:`Connect to the nRF9160 DK with LTE Link Monitor<lte_connect>`.
 
    .. note::
 
-      Make sure that **Automatic requests** is enabled in LTE Link Monitor.
+      Make sure that **Automatic requests** is enabled in LTE Link Monitor.
 
-#. Observe that initially the command :command:`AT+CFUN?` is automatically sent to the modem, which returns a value 4, indicating that the modem is in the offline mode.
-#. Observe that the LTE Link Monitor terminal display also shows :command:`AT+CFUN=1` followed by ``OK`` indicating that the modem has changed to the normal mode.
+#. Observe that initially the command :command:`AT+CFUN?` is automatically sent to the modem, which returns a value 4, indicating that the modem is in the offline mode.
+#. Observe that the LTE Link Monitor terminal display also shows :command:`AT+CFUN=1` followed by ``OK`` indicating that the modem has changed to the normal mode.
 #. Run the following commands from the LTE Link Monitor terminal:
 
    a. Enter the command: :command:`AT+CFUN?`
@@ -83,7 +89,7 @@ After programming the sample to your board, test the sample by performing the fo
    #. Enter the command: :command:`AT%CMNG=1`
 
       This command displays a list of all certificates that are stored on your device.
-      If the device has been added to nRF Cloud, a CA certificate, a client certificate, and a private key with security tag 16842753 (which is the security tag for nRF Cloud credentials) are displayed.
+      If you add the device to nRF Cloud, a CA certificate, a client certificate, and a private key with security tag 16842753 (which is the security tag for nRF Cloud credentials) are displayed.
 
 
 Sample output
@@ -98,26 +104,26 @@ The following is a sample output of the command: :command:`AT%XMONITOR`
    OK
 
 
-Dependencies
-************
-
-This sample uses the following libraries:
-
-From |NCS|
-  * ``lib/at_host`` which includes:
-      * :ref:`at_cmd_readme`
-      * :ref:`at_notif_readme`
-
-From nrfxlib
-  * :ref:`nrfxlib:bsdlib`
-
-In addition, it uses the following samples:
-
-From |NCS|
-  * :ref:`secure_partition_manager`
-
-
 References
 **********
 
 `AT Commands Reference Guide`_
+
+
+Dependencies
+************
+
+This sample uses the following |NCS| libraries:
+
+
+* :ref:`lib_at_host` which includes:
+
+   * :ref:`at_monitor_readme`
+
+It uses the following `sdk-nrfxlib`_ library:
+
+* :ref:`nrfxlib:nrf_modem`
+
+In addition, it uses the following sample:
+
+* :ref:`secure_partition_manager`

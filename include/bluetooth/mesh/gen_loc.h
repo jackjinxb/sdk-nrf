@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -19,24 +19,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/** @cond INTERNAL_HIDDEN */
-#define BT_MESH_LOC_OP_GLOBAL_GET BT_MESH_MODEL_OP_2(0x82, 0x25)
-#define BT_MESH_LOC_OP_GLOBAL_STATUS BT_MESH_MODEL_OP_1(0x40)
-#define BT_MESH_LOC_OP_GLOBAL_SET BT_MESH_MODEL_OP_1(0x41)
-#define BT_MESH_LOC_OP_GLOBAL_SET_UNACK BT_MESH_MODEL_OP_1(0x42)
-#define BT_MESH_LOC_OP_LOCAL_GET BT_MESH_MODEL_OP_2(0x82, 0x26)
-#define BT_MESH_LOC_OP_LOCAL_STATUS BT_MESH_MODEL_OP_2(0x82, 0x27)
-#define BT_MESH_LOC_OP_LOCAL_SET BT_MESH_MODEL_OP_2(0x82, 0x28)
-#define BT_MESH_LOC_OP_LOCAL_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x29)
-
-#define BT_MESH_LOC_MSG_LEN_GLOBAL_GET 0
-#define BT_MESH_LOC_MSG_LEN_GLOBAL_STATUS 10
-#define BT_MESH_LOC_MSG_LEN_GLOBAL_SET 10
-#define BT_MESH_LOC_MSG_LEN_LOCAL_GET 0
-#define BT_MESH_LOC_MSG_LEN_LOCAL_STATUS 9
-#define BT_MESH_LOC_MSG_LEN_LOCAL_SET 9
-/** @endcond */
 
 /**
  * @defgroup bt_mesh_loc_altitude_defines Defines for altitude.
@@ -78,26 +60,46 @@ struct bt_mesh_loc_global {
 	 * Global altitude above the WGS84 datum in meters.
 	 * @sa bt_mesh_loc_altitude_defines
 	 */
-	s16_t altitude;
+	int16_t altitude;
 };
 
 /** Local location parameters. */
 struct bt_mesh_loc_local {
 	/** Local north position in decimeters. */
-	s16_t north;
+	int16_t north;
 	/** Local east position in decimeters. */
-	s16_t east;
+	int16_t east;
 	/** Local altitude in decimeters. @sa bt_mesh_loc_altitude_defines */
-	s16_t altitude;
+	int16_t altitude;
 	/** Floor number. @sa bt_mesh_loc_floor_number_defines */
-	s16_t floor_number;
+	int16_t floor_number;
 	/** Whether the device is movable. */
 	bool is_mobile;
-	/** Time since the previous position update, or @ref K_FOREVER. */
-	s32_t time_delta;
+	/** Time since the previous position update in milliseconds, or
+	 *  @em SYS_FOREVER_MS.
+	 */
+	int32_t time_delta;
 	/** Precision of the location in millimeters. */
-	u32_t precision_mm;
+	uint32_t precision_mm;
 };
+
+/** @cond INTERNAL_HIDDEN */
+#define BT_MESH_LOC_OP_GLOBAL_GET BT_MESH_MODEL_OP_2(0x82, 0x25)
+#define BT_MESH_LOC_OP_GLOBAL_STATUS BT_MESH_MODEL_OP_1(0x40)
+#define BT_MESH_LOC_OP_GLOBAL_SET BT_MESH_MODEL_OP_1(0x41)
+#define BT_MESH_LOC_OP_GLOBAL_SET_UNACK BT_MESH_MODEL_OP_1(0x42)
+#define BT_MESH_LOC_OP_LOCAL_GET BT_MESH_MODEL_OP_2(0x82, 0x26)
+#define BT_MESH_LOC_OP_LOCAL_STATUS BT_MESH_MODEL_OP_2(0x82, 0x27)
+#define BT_MESH_LOC_OP_LOCAL_SET BT_MESH_MODEL_OP_2(0x82, 0x28)
+#define BT_MESH_LOC_OP_LOCAL_SET_UNACK BT_MESH_MODEL_OP_2(0x82, 0x29)
+
+#define BT_MESH_LOC_MSG_LEN_GLOBAL_GET 0
+#define BT_MESH_LOC_MSG_LEN_GLOBAL_STATUS 10
+#define BT_MESH_LOC_MSG_LEN_GLOBAL_SET 10
+#define BT_MESH_LOC_MSG_LEN_LOCAL_GET 0
+#define BT_MESH_LOC_MSG_LEN_LOCAL_STATUS 9
+#define BT_MESH_LOC_MSG_LEN_LOCAL_SET 9
+/** @endcond */
 
 #ifdef __cplusplus
 }

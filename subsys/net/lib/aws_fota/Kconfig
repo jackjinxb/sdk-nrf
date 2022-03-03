@@ -1,6 +1,6 @@
 # Copyright (c) 2019 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 menuconfig AWS_FOTA
@@ -22,6 +22,10 @@ config AWS_FOTA_HOSTNAME_MAX_LEN
 config AWS_FOTA_FILE_PATH_MAX_LEN
 	int "File path buffer size"
 	default 255
+
+config AWS_FOTA_DOWNLOAD_SECURITY_TAG
+	int "Security tag to be used for downloads"
+	default -1
 
 
 module=AWS_FOTA

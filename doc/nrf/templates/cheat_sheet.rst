@@ -5,6 +5,10 @@
 Cheat Sheet
 ###########
 
+.. contents::
+   :local:
+   :depth: 2
+
 This topic is not meant to be included in the output, but to serve as reference for common RST syntax and linking between doc sets.
 
 RST syntax
@@ -34,13 +38,47 @@ Lists
 
 #. text
 
-   - bullet
-   - bullet
+   * bullet
+   * bullet
+
 #. text
 #. text
 
    a. different numbering
    #. another item
+
+Diagrams
+========
+
+You can include Message Sequence Chart (MSC) diagrams in RST by using the ``.. msc::`` directive and including the MSC content, using the syntax described for example here: http://www.mcternan.me.uk/mscgen/.
+Example:
+
+.. code-block:: none
+
+   .. msc::
+       hscale = "1.3";
+       Module,Application;
+       Module<<Application      [label="nrf_cloud_connect() returns successfully"];
+       Module>>Application      [label="NRF_CLOUD_EVT_TRANSPORT_CONNECTED"];
+       Module>>Application      [label="NRF_CLOUD_EVT_USER_ASSOCIATION_REQUEST"];
+       Module<<Application      [label="nrf_cloud_user_associate()"];
+       Module>>Application      [label="NRF_CLOUD_EVT_USER_ASSOCIATED"];
+       Module>>Application      [label="NRF_CLOUD_EVT_READY"];
+       Module>>Application      [label="NRF_CLOUD_EVT_TRANSPORT_DISCONNECTED"];
+
+
+This will generate the following output:
+
+   .. msc::
+       hscale = "1.3";
+       Module,Application;
+       Module<<Application      [label="nrf_cloud_connect() returns successfully"];
+       Module>>Application      [label="NRF_CLOUD_EVT_TRANSPORT_CONNECTED"];
+       Module>>Application      [label="NRF_CLOUD_EVT_USER_ASSOCIATION_REQUEST"];
+       Module<<Application      [label="nrf_cloud_user_associate()"];
+       Module>>Application      [label="NRF_CLOUD_EVT_USER_ASSOCIATED"];
+       Module>>Application      [label="NRF_CLOUD_EVT_READY"];
+       Module>>Application      [label="NRF_CLOUD_EVT_TRANSPORT_DISCONNECTED"];
 
 
 Definition list
@@ -132,6 +170,10 @@ We can create more complex tables as ASCII art:
    * - Gannet Ripple
      - 1.99
      - On a stick!
+   * - Line-break example
+     - x
+     - | First line
+       | Second line
 
 .. csv-table:: Frozen Delights!
    :header: "Treat", "Quantity", "Description"
@@ -142,24 +184,31 @@ We can create more complex tables as ASCII art:
    crunchy, now would it?"
    "Gannet Ripple", 1.99, "On a stick!"
 
+To force line-breaks in a table, use a line block:
+
+| First line
+| Second line
+
 
 Links
 =====
 
-Nulla aliquam lacinia risus `eget congue <http://www.nordicsemi.com>`_. Morbi posuere a nisi id `vulputate`_. Curabitur ac lacus magna. Aliquam urna lacus, ornare non iaculis vel, ullamcorper vel dolor. Nunc vel dui vulputate, imperdiet metus eget, tristique dui. Etiam non lorem vel magna dictum aliquam. Nunc hendrerit facilisis diam, non mollis leo commodo nec.
+Nulla aliquam lacinia risus `eget congue <https://www.nordicsemi.com>`_. Morbi posuere a nisi id `vulputate`_. Curabitur ac lacus magna. Aliquam urna lacus, ornare non iaculis vel, ullamcorper vel dolor. Nunc vel dui vulputate, imperdiet metus eget, tristique dui. Etiam non lorem vel magna dictum aliquam. Nunc hendrerit facilisis diam, non mollis leo commodo nec.
 
-.. _vulputate: http://www.nordicsemi.com
+.. _vulputate: https://www.nordicsemi.com
 
-www.nordicsemi.com http://www.nordicsemi.com
+www.nordicsemi.com https://www.nordicsemi.com
 
 :ref:`tables`
 
-`override <tables>`_
+`override <tables_>`_
 
 :ref:`Overriding link text <table>`
 
 Use :ref: to link to IDs and :doc: to link to files.
 
+If you have a link ID in :file:`links.txt` that consists of only one word, you cannot have a heading anywhere that is the same.
+If you do, you'll get an error about a duplicate ID in :file:`links.txt`.
 
 Images
 ======
@@ -185,6 +234,51 @@ Variables
 Curabitur nisl |sapien|, posuere auctor metus et, convallis varius turpis. Sed elementum rhoncus |sapien|, dictum posuere lectus.
 
 .. |sapien| replace:: some Latin word
+
+Reuse
+*****
+
+To reuse text from the same or another file in the same doc set:
+
+Include 1:
+  .. include:: cheat_sheet.rst
+     :start-line: 19
+     :end-line: 27
+
+Include 2:
+  .. include:: ../gs_installing.rst
+     :start-after: west-error-start
+     :end-before: west-error-end
+
+To reuse text from another doc set:
+
+Include 3:
+  .. ncs-include:: getting_started/installation_win.rst
+     :docset: zephyr
+     :auto-dedent:
+     :start-line: 10
+     :end-line: 18
+
+Include 4:
+  .. ncs-include:: nfc/doc/type_2_tag.rst
+     :docset: nrfxlib
+     :auto-dedent:
+     :start-after: Version 1.0*.
+     :end-before: If you use the supplied library,
+
+You can also use ncs-include if you want to use the indentation options inside the nrf doc set:
+
+Include 5 (similar to include 2, but improved indentation):
+  .. ncs-include:: ../gs_installing.rst
+     :start-after: west-error-start
+     :end-before: west-error-end
+     :auto-dedent:
+
+See https://github.com/nrfconnect/sdk-nrf/commit/fa5bd7330538f6a12e059c9d60fa2696e48fcf3a for implementation and usage.
+
+.. tip::
+   If you need a "start-after" text that occurs more than once inside a document, you can combine ``:start-after:`` with ``:start-line:``.
+   Sphinx will then use the first occurrence of the "start-after" text after the specified start line.
 
 Including text inside a nested list
 ===================================
@@ -221,6 +315,70 @@ Another list which includes the steps from the previous list:
    #. substepB5
 
 
+Including code snippets in RST
+******************************
+
+To include a code snippet from a code file in an .rst file, you need to edit both.
+
+Defining snippet in code file
+=============================
+
+Use RST tags in the comments to enclose the code you want to become a snippet.
+
+Use the following tag formatting::
+
+* Starting tag: /** .. include_startingpoint_<name of file where the snippet goes>_rst_<number of snippet within the .c file> */
+* Ending tag: /** .. include_endpoint_<name of file where the snippet goes>_rst_<number of snippet within the .c file> */
+
+For example::
+
+    /** .. include_startingpoint_scan_rst_1 */
+        static void scan_filter_no_match(struct bt_scan_device_info *device_info,
+                     bool connectable)
+    {
+        struct bt_conn *conn;
+        char addr[BT_ADDR_LE_STR_LEN];
+        if (device_info->adv_info.adv_type == BT_LE_ADV_DIRECT_IND) {
+            bt_addr_le_to_str(device_info->addr, addr, sizeof(addr));
+            printk("Direct advertising received from %s\n", addr);
+            bt_scan_stop();
+
+            conn = bt_conn_create_le(device_info->addr,
+                         device_info->conn_param);
+
+            if (conn) {
+                default_conn = bt_conn_ref(conn);
+                bt_conn_unref(conn);
+            }
+        }
+    }
+    /** .. include_endpoint_scan_rst_1 */
+
+
+Including snippet in .rst
+=========================
+
+To include the snippet you defined in a code file into an .rst file, use the following RST syntax:
+
+.. parsed-literal::
+   :class: highlight
+
+   .\. literalinclude:: <path to the code file with the snippet>
+      :language: <coding language, for example 'c', 'python', 'ruby'>
+      :start-after: <opening tag of the snippet>
+      :end-before: <closing tag of the snippet>
+
+For example:
+
+.. parsed-literal::
+   :class: highlight
+
+   .\. literalinclude:: ../../samples/bluetooth/central_hids/src/main.c
+       :language: c
+       :start-after: include_startingpoint_scan_rst_1
+       :end-before: include_endpoint_scan_rst_1
+
+
 Linking between doc sets
 ************************
 
@@ -241,8 +399,8 @@ See `the breathe documentation <https://breathe.readthedocs.io/en/latest/directi
 
 To link to doxygen macros, enums or functions use:
 
-* :c:macro:`BT_GATT_HIDS_INFORMATION_LEN`
-* :cpp:func:`bt_gatt_hids_init`
+* :c:macro:`BT_HIDS_INFORMATION_LEN`
+* :c:func:`bt_hids_init`
 
 Linked RST project
 ==================

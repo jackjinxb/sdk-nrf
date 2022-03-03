@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef DFU_TARGET_H__
@@ -20,8 +20,12 @@
 extern "C" {
 #endif
 
-#define DFU_TARGET_IMAGE_TYPE_MCUBOOT 1
-#define DFU_TARGET_IMAGE_TYPE_MODEM_DELTA 2
+enum dfu_target_image_type {
+	DFU_TARGET_IMAGE_TYPE_ANY = 0,
+	DFU_TARGET_IMAGE_TYPE_MCUBOOT = 1,
+	DFU_TARGET_IMAGE_TYPE_MODEM_DELTA,
+	DFU_TARGET_IMAGE_TYPE_FULL_MODEM
+};
 
 enum dfu_target_evt_id {
 	DFU_TARGET_EVT_TIMEOUT,
@@ -107,8 +111,19 @@ int dfu_target_write(const void *const buf, size_t len);
  **/
 int dfu_target_done(bool successful);
 
+/**
+ * @brief Deinitialize the resources that were needed for the current DFU
+ *	  target if any and resets the current dfu target.
+ *
+ * @return 0 for an successful deinitialization and reset or a negative error
+ *	   code identicating reason of failure.
+ **/
+int dfu_target_reset(void);
+
 #ifdef __cplusplus
 }
 #endif
+
+/** @} */
 
 #endif /* DFU_TARGET_H__ */

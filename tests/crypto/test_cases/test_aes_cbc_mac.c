@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -49,16 +49,8 @@ static size_t key_len;
 static size_t iv_len;
 static size_t ad_len;
 
-void aes_cbc_mac_clear_buffers(void)
-{
-	memset(m_aes_input_buf, 0xFF, sizeof(m_aes_input_buf));
-	memset(m_aes_output_buf, 0xFF, sizeof(m_aes_output_buf));
-	memset(m_aes_expected_output_buf, 0xFF,
-	       sizeof(m_aes_expected_output_buf));
-	memset(m_aes_key_buf, 0x00, sizeof(m_aes_key_buf));
-	memset(m_aes_iv_buf, 0xFF, sizeof(m_aes_iv_buf));
-	memset(m_aes_temp_buf, 0x00, sizeof(m_aes_temp_buf));
-}
+void aes_cbc_mac_clear_buffers(void);
+void unhexify_aes_cbc_mac(void);
 
 static int cipher_init(mbedtls_cipher_context_t *p_ctx, size_t key_len_bytes,
 		       mbedtls_cipher_mode_t mode)
@@ -120,47 +112,58 @@ static int cipher_update_iterative(mbedtls_cipher_context_t *p_ctx,
 	return _cipher_update_iterative_full_blocks(p_ctx, input_len);
 }
 
-__attribute__((noinline)) static void unhexify_aes(void)
-{
-	bool encrypt = (p_test_vector->direction == MBEDTLS_ENCRYPT);
-
-	key_len = hex2bin(p_test_vector->p_key, strlen(p_test_vector->p_key),
-			  m_aes_key_buf, strlen(p_test_vector->p_key));
-	iv_len = hex2bin(p_test_vector->p_iv, strlen(p_test_vector->p_iv),
-			 m_aes_iv_buf, strlen(p_test_vector->p_iv));
-	ad_len = hex2bin(p_test_vector->p_ad, strlen(p_test_vector->p_ad),
-			 m_aes_temp_buf, strlen(p_test_vector->p_ad));
-
-	if (encrypt) {
-		input_len = hex2bin(p_test_vector->p_plaintext,
-				    strlen(p_test_vector->p_plaintext),
-				    m_aes_input_buf,
-				    strlen(p_test_vector->p_plaintext));
-		output_len = hex2bin(p_test_vector->p_ciphertext,
-				     strlen(p_test_vector->p_ciphertext),
-				     m_aes_expected_output_buf,
-				     strlen(p_test_vector->p_ciphertext));
-	} else {
-		input_len = hex2bin(p_test_vector->p_ciphertext,
-				    strlen(p_test_vector->p_ciphertext),
-				    m_aes_input_buf,
-				    strlen(p_test_vector->p_ciphertext));
-		output_len = hex2bin(p_test_vector->p_plaintext,
-				     strlen(p_test_vector->p_plaintext),
-				     m_aes_expected_output_buf,
-				     strlen(p_test_vector->p_plaintext));
-	}
-}
-
 static void aes_setup_cbc_mac(void)
 {
+	static int i;
+
 	aes_cbc_mac_clear_buffers();
 
-	static int i;
 	p_test_vector =
 		ITEM_GET(test_vector_aes_cbc_mac_data, test_vector_aes_t, i++);
 
-	unhexify_aes();
+	unhexify_aes_cbc_mac();
+}
+
+void aes_cbc_mac_clear_buffers(void)
+{
+	memset(m_aes_input_buf, 0xFF, sizeof(m_aes_input_buf));
+	memset(m_aes_output_buf, 0xFF, sizeof(m_aes_output_buf));
+	memset(m_aes_expected_output_buf, 0xFF,
+	       sizeof(m_aes_expected_output_buf));
+	memset(m_aes_key_buf, 0x00, sizeof(m_aes_key_buf));
+	memset(m_aes_iv_buf, 0xFF, sizeof(m_aes_iv_buf));
+	memset(m_aes_temp_buf, 0x00, sizeof(m_aes_temp_buf));
+}
+
+__attribute__((noinline)) void unhexify_aes_cbc_mac(void)
+{
+	bool encrypt = (p_test_vector->direction == MBEDTLS_ENCRYPT);
+
+	key_len = hex2bin_safe(p_test_vector->p_key,
+			       m_aes_key_buf,
+			       sizeof(m_aes_key_buf));
+	iv_len = hex2bin_safe(p_test_vector->p_iv,
+			      m_aes_iv_buf,
+			      sizeof(m_aes_iv_buf));
+	ad_len = hex2bin_safe(p_test_vector->p_ad,
+			      m_aes_temp_buf,
+			      sizeof(m_aes_temp_buf));
+
+	if (encrypt) {
+		input_len = hex2bin_safe(p_test_vector->p_plaintext,
+					 m_aes_input_buf,
+					 sizeof(m_aes_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					  m_aes_expected_output_buf,
+					  sizeof(m_aes_expected_output_buf));
+	} else {
+		input_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					 m_aes_input_buf,
+					 sizeof(m_aes_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_plaintext,
+					  m_aes_expected_output_buf,
+					  sizeof(m_aes_expected_output_buf));
+	}
 }
 
 /**@brief Function for the AES MAC test execution.
@@ -195,7 +198,7 @@ void exec_test_case_aes_cbc_mac(void)
 
 	/* Redo all but now in iterations. */
 	aes_cbc_mac_clear_buffers();
-	unhexify_aes();
+	unhexify_aes_cbc_mac();
 
 	err_code = cipher_init(&ctx, key_len, p_test_vector->mode);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);

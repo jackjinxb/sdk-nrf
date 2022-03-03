@@ -1,92 +1,49 @@
 /*
- * Copyright (c) 2019 Nordic Semiconductor ASA
+ * Copyright (c) 2021 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
 #include <drivers/gps.h>
-#include <stdio.h>
 #include <net/lwm2m.h>
+#include <net/lwm2m_path.h>
 
-#include "ui.h"
+#include "gps_pvt_event.h"
+#include "lwm2m_app_utils.h"
+
+#define MODULE lwm2m_app_loc
 
 #include <logging/log.h>
-LOG_MODULE_REGISTER(app_lwm2m_loc, CONFIG_APP_LOG_LEVEL);
+LOG_MODULE_REGISTER(MODULE, CONFIG_APP_LOG_LEVEL);
 
-static struct gps_data nmea_data;
-static struct device *gps_dev;
-static struct gps_trigger gps_trig = {
-	.type = GPS_TRIG_DATA_READY,
-};
-
-static void update_location_data(struct gps_data *nmea)
+static bool event_handler(const struct event_header *eh)
 {
-	LOG_DBG("nmea_data");
-	/* TODO: change API to send actual values (not string)
-	 * so we can update Location object resources
-	 */
+	if (is_gps_pvt_event(eh)) {
+		struct gps_pvt_event *event = cast_gps_pvt_event(eh);
+
+		double latitude = (double)event->pvt.latitude;
+		double longitude = (double)event->pvt.longitude;
+		double altitude = (double)event->pvt.altitude;
+		double speed = (double)event->pvt.speed;
+		double radius = (double)event->pvt.accuracy;
+
+		lwm2m_engine_set_float(LWM2M_PATH(LWM2M_OBJECT_LOCATION_ID, 0, LATITUDE_RID),
+				       &latitude);
+		lwm2m_engine_set_float(LWM2M_PATH(LWM2M_OBJECT_LOCATION_ID, 0, LONGITUDE_RID),
+				       &longitude);
+		lwm2m_engine_set_float(LWM2M_PATH(LWM2M_OBJECT_LOCATION_ID, 0, ALTITUDE_RID),
+				       &altitude);
+		lwm2m_engine_set_float(
+			LWM2M_PATH(LWM2M_OBJECT_LOCATION_ID, 0, LOCATION_RADIUS_RID), &radius);
+		lwm2m_engine_set_float(
+			LWM2M_PATH(LWM2M_OBJECT_LOCATION_ID, 0, LOCATION_SPEED_RID), &speed);
+
+		return true;
+	}
+
+	return false;
 }
 
-/**@brief Callback for GPS trigger events */
-static void gps_trigger_handler(struct device *dev, struct gps_trigger *trigger)
-{
-	ARG_UNUSED(trigger);
-	int err;
-	static u32_t timestamp_prev;
-
-	if (k_uptime_get_32() - timestamp_prev <
-	    K_SECONDS(CONFIG_APP_HOLD_TIME_GPS)) {
-		return;
-	}
-
-	if (gps_dev == NULL) {
-		LOG_ERR("Could not get %s device", CONFIG_GPS_DEV_NAME);
-		return;
-	}
-
-	err = gps_sample_fetch(gps_dev);
-	if (err < 0) {
-		LOG_ERR("GPS sample fetch error: %d", err);
-		return;
-	}
-
-	err = gps_channel_get(gps_dev, GPS_CHAN_NMEA, &nmea_data);
-	if (err < 0) {
-		LOG_ERR("GPS channel get error: %d", err);
-		return;
-	}
-
-	update_location_data(&nmea_data);
-	timestamp_prev = k_uptime_get_32();
-}
-
-int lwm2m_init_location(void)
-{
-	int err;
-
-	gps_dev = device_get_binding(CONFIG_GPS_DEV_NAME);
-	if (gps_dev == NULL) {
-		LOG_ERR("Could not get %s device", CONFIG_GPS_DEV_NAME);
-		return -EINVAL;
-	}
-
-	LOG_DBG("GPS device found: %s", CONFIG_GPS_DEV_NAME);
-
-	if (IS_ENABLED(CONFIG_GPS_TRIGGER)) {
-		err = gps_trigger_set(gps_dev, &gps_trig, gps_trigger_handler);
-		if (err) {
-			LOG_ERR("Could not set trigger, error code: %d", err);
-			return err;
-		}
-	}
-
-	err = gps_sample_fetch(gps_dev);
-	__ASSERT(err == 0, "GPS sample could not be fetched.");
-
-	err = gps_channel_get(gps_dev, GPS_CHAN_NMEA, &nmea_data);
-	__ASSERT(err == 0, "GPS sample could not be retrieved.");
-
-	update_location_data(&nmea_data);
-	return 0;
-}
+EVENT_LISTENER(MODULE, event_handler);
+EVENT_SUBSCRIBE(MODULE, gps_pvt_event);

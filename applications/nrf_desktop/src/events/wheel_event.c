@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -13,7 +13,8 @@ static int log_wheel_event(const struct event_header *eh, char *buf,
 {
 	const struct wheel_event *event = cast_wheel_event(eh);
 
-	return snprintf(buf, buf_len, "wheel=%d", event->wheel);
+	EVENT_MANAGER_LOG(eh, "wheel=%d", event->wheel);
+	return 0;
 }
 
 EVENT_TYPE_DEFINE(wheel_event,

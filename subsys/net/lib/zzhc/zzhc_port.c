@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <logging/log.h>
@@ -10,7 +10,7 @@ LOG_MODULE_REGISTER(zzhc_port, CONFIG_ZZHC_LOG_LEVEL);
 #include <zephyr.h>
 #include <sys/base64.h>
 #include <data/json.h>
-#include <at_cmd_parser/at_cmd_parser.h>
+#include <modem/at_cmd_parser.h>
 #include "zzhc_internal.h"
 
 #define AT_PARAMS_MAX     11        /** Max. # of AT-params to parse */
@@ -156,10 +156,10 @@ bool zzhc_check_http_payload(struct zzhc *ctx)
 	return (res_code && res_desc);
 }
 
-int zzhc_get_at_param_short(struct zzhc *ctx, char *data, int idx)
+int zzhc_get_at_param_short(struct zzhc *ctx, const char *data, int idx)
 {
 	int rc;
-	u16_t evt;
+	uint16_t evt;
 	struct at_param_list *at_list = (struct at_param_list *)ctx->at_list;
 
 	rc = at_parser_max_params_from_str(data, NULL, at_list, AT_PARAMS_MAX);

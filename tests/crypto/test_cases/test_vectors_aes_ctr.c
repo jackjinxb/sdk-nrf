@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -283,7 +283,7 @@ ITEM_REGISTER(test_vector_aes_ctr_data,
 	.p_ad = "00000000000000000000000000000000"
 };
 
-#if defined(CONFIG_MBEDTLS_CIPHER_AES_256_CBC_C)
+#if defined(MBEDTLS_CIPHER_AES_256_CBC_C)
 
 const char ctr_192_key[] = {
 	"8e73b0f7da0e6452c810f32b809079e562f8ead2522c6b7b"

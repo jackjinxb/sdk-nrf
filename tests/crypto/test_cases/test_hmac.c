@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -39,6 +39,27 @@ static size_t in_len;
 static size_t expected_hmac_len;
 static size_t hmac_len;
 
+void hmac_clear_buffers(void);
+void unhexify_hmac(void);
+
+static void hmac_setup(void)
+{
+	hmac_clear_buffers();
+	p_test_vector = ITEM_GET(test_vector_hmac_data, test_vector_hmac_t,
+				 hmac_vector_n);
+	unhexify_hmac();
+}
+
+static void hmac_teardown(void)
+{
+	hmac_vector_n++;
+}
+
+static void hmac_combined_teardown(void)
+{
+	hmac_combined_vector_n++;
+}
+
 void hmac_clear_buffers(void)
 {
 	memset(m_hmac_key_buf, 0x00, sizeof(m_hmac_key_buf));
@@ -51,34 +72,16 @@ void hmac_clear_buffers(void)
 __attribute__((noinline)) void unhexify_hmac(void)
 {
 	/* Fetch and unhexify test vectors. */
-	key_len = hex2bin(p_test_vector->p_key, strlen(p_test_vector->p_key),
-			  m_hmac_key_buf, strlen(p_test_vector->p_key));
-	in_len = hex2bin(p_test_vector->p_input, strlen(p_test_vector->p_input),
-			 m_hmac_input_buf, strlen(p_test_vector->p_input));
-	expected_hmac_len = hex2bin(p_test_vector->p_expected_output,
-				    strlen(p_test_vector->p_expected_output),
-				    m_hmac_expected_output_buf,
-				    strlen(p_test_vector->p_expected_output));
-
+	key_len = hex2bin_safe(p_test_vector->p_key,
+			       m_hmac_key_buf,
+			       sizeof(m_hmac_key_buf));
+	in_len = hex2bin_safe(p_test_vector->p_input,
+			      m_hmac_input_buf,
+			      sizeof(m_hmac_input_buf));
+	expected_hmac_len = hex2bin_safe(p_test_vector->p_expected_output,
+					 m_hmac_expected_output_buf,
+					 sizeof(m_hmac_expected_output_buf));
 	hmac_len = expected_hmac_len;
-}
-
-void hmac_setup(void)
-{
-	hmac_clear_buffers();
-	p_test_vector = ITEM_GET(test_vector_hmac_data, test_vector_hmac_t,
-				 hmac_vector_n);
-	unhexify_hmac();
-}
-
-void hmac_teardown(void)
-{
-	hmac_vector_n++;
-}
-
-void hmac_combined_teardown(void)
-{
-	hmac_combined_vector_n++;
 }
 
 /**@brief Function for the test execution.

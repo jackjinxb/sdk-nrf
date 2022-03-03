@@ -2,8 +2,12 @@ sample:
   description: TBD
   name: TBD
 tests:
-  test_build:
+  samples.nfc.tnep_tag:
     build_only: true
-    build_on_all: true
-    platform_whitelist: nrf52840_pca10056 nrf52_pca10040 nrf5340_dk_nrf5340_cpuapp
+    platform_allow: nrf52840dk_nrf52840 nrf52dk_nrf52832 nrf5340dk_nrf5340_cpuapp nrf5340dk_nrf5340_cpuapp_ns
+    integration_platforms:
+      - nrf52840dk_nrf52840
+      - nrf52dk_nrf52832
+      - nrf5340dk_nrf5340_cpuapp
+      - nrf5340dk_nrf5340_cpuapp_ns
     tags: ci_build

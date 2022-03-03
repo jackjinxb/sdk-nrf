@@ -1,7 +1,7 @@
 #
-# Copyright (c) 2018 Nordic Semiconductor
+# Copyright (c) 2018 - 2020 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
 
@@ -13,11 +13,17 @@ rsource "dfu/Kconfig"
 
 rsource "esb/Kconfig"
 
+rsource "gazell/Kconfig"
+
+rsource "pcd/Kconfig"
+
 rsource "net/Kconfig"
 
 rsource "nfc/Kconfig"
 
 rsource "event_manager/Kconfig"
+
+rsource "event_manager_profiler_tracer/Kconfig"
 
 rsource "profiler/Kconfig"
 
@@ -30,3 +36,19 @@ rsource "debug/Kconfig"
 rsource "shell/Kconfig"
 
 rsource "mpsl/Kconfig"
+
+rsource "matter/Kconfig"
+
+rsource "partition_manager/Kconfig"
+
+rsource "nrf_rpc/Kconfig"
+
+rsource "zigbee/Kconfig"
+
+rsource "mgmt/fmfu/Kconfig"
+
+rsource "caf/Kconfig"
+
+rsource "ieee802154/Kconfig"
+
+rsource "dm/Kconfig"

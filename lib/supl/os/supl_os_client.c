@@ -1,22 +1,22 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <logging/log.h>
 #include <zephyr.h>
+
+#include <nrf_errno.h>
+#include <nrf_modem_at.h>
 
 #include <supl_session.h>
 #include <supl_os_client.h>
 #include <lte_params.h>
 #include <utils.h>
 
-#include <at_cmd.h>
-
-#define AT_IMSI          "AT+CIMI"
-#define AT_XMONITOR      "AT\%XMONITOR"
-#define SUPL_IMSI_LENGTH 8
+#define AT_CDGCONT       "AT+CGDCONT?"
+#define AT_XMONITOR      "AT%%XMONITOR"
 
 LOG_MODULE_REGISTER(supl_client, LOG_LEVEL_DBG);
 
@@ -79,28 +79,37 @@ static int parse_at_resp(struct supl_session_ctx *session_ctx,
 	return 0;
 }
 
-static int create_device_id(void)
+static int set_device_id(void)
 {
+	int err;
 	char response[128] = { 0 };
 
-	if (at_cmd_write(AT_IMSI, response, sizeof(response), NULL) != 0) {
-		LOG_ERR("Fetching IMSI failed");
+	device_id_init(&supl_client_ctx);
+
+	err = nrf_modem_at_cmd(response, sizeof(response), AT_CDGCONT);
+	if (err != 0 && err != -NRF_E2BIG) {
+		LOG_ERR("Reading IP address failed");
 		return -1;
 	}
 
-	if (hexstr2hex(response,
-		       get_line_len(response, sizeof(response)),
-		       supl_client_ctx.device_id,
-		       SUPL_IMSI_LENGTH) != SUPL_IMSI_LENGTH) {
-		LOG_ERR("Parsing IMSI failed");
+	if (parse_at_resp(&supl_client_ctx,
+			  response,
+			  sizeof(response),
+			  handler_at_cgdcont)) {
+		LOG_ERR("Parsing IP address failed");
 		return -1;
 	}
 
-	supl_client_ctx.device_id_choice = LIBSUPL_ID_CHOICE_IMSI;
+	return 0;
+}
 
-	memset(response, 0, sizeof(response));
+static int set_lte_params(void)
+{
+	char response[192] = { 0 };
 
-	if (at_cmd_write(AT_XMONITOR, response, sizeof(response), NULL) != 0) {
+	lte_params_init(&supl_client_ctx.lte_params);
+
+	if (nrf_modem_at_cmd(response, sizeof(response), AT_XMONITOR) != 0) {
 		LOG_ERR("Fetching LTE info failed");
 		return -1;
 	}
@@ -115,9 +124,10 @@ static int create_device_id(void)
 	return 0;
 }
 
-int supl_session(const nrf_gnss_agps_data_frame_t *const agps_request)
+int supl_session(const struct nrf_modem_gnss_agps_data_frame *const agps_request)
 {
-	create_device_id();
+	set_device_id();
+	set_lte_params();
 
 	supl_client_ctx.agps_types.data_flags = agps_request->data_flags;
 	supl_client_ctx.agps_types.sv_mask_alm = agps_request->sv_mask_alm;

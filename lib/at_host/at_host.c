@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <zephyr.h>
@@ -11,17 +11,14 @@
 #include <drivers/uart.h>
 #include <string.h>
 #include <init.h>
-#include <at_cmd.h>
-#include <at_notif.h>
+
+#include <nrf_modem_at.h>
+#include <modem/at_monitor.h>
 
 LOG_MODULE_REGISTER(at_host, CONFIG_AT_HOST_LOG_LEVEL);
 
 /* Stack definition for AT host workqueue */
-#ifdef CONFIG_SIZE_OPTIMIZATIONS
-#define AT_HOST_STACK_SIZE 512
-#else
 #define AT_HOST_STACK_SIZE 1024
-#endif
 
 K_THREAD_STACK_DEFINE(at_host_stack_area, AT_HOST_STACK_SIZE);
 
@@ -29,16 +26,9 @@ K_THREAD_STACK_DEFINE(at_host_stack_area, AT_HOST_STACK_SIZE);
 #define CONFIG_UART_1_NAME      "UART_1"
 #define CONFIG_UART_2_NAME      "UART_2"
 
-#define INVALID_DESCRIPTOR      -1
-
-#define OK_STR    "OK\r\n"
-#define ERROR_STR "ERROR\r\n"
-
-#if CONFIG_AT_HOST_CMD_MAX_LEN > CONFIG_AT_CMD_RESPONSE_MAX_LEN
 #define AT_BUF_SIZE CONFIG_AT_HOST_CMD_MAX_LEN
-#else
-#define AT_BUF_SIZE CONFIG_AT_CMD_RESPONSE_MAX_LEN
-#endif
+
+AT_MONITOR(at_host, ANY, response_handler);
 
 /** @brief Termination Modes. */
 enum term_modes {
@@ -49,7 +39,6 @@ enum term_modes {
 	MODE_COUNT      /* Counter of term_modes */
 };
 
-
 /** @brief UARTs. */
 enum select_uart {
 	UART_0,
@@ -58,12 +47,11 @@ enum select_uart {
 };
 
 static enum term_modes term_mode;
-static struct device *uart_dev;
+static const struct device *uart_dev;
+static bool at_buf_busy; /* Guards at_buf while processing a command */
 static char at_buf[AT_BUF_SIZE]; /* AT command and modem response buffer */
 static struct k_work_q at_host_work_q;
 static struct k_work cmd_send_work;
-
-
 
 static inline void write_uart_string(const char *str)
 {
@@ -73,54 +61,33 @@ static inline void write_uart_string(const char *str)
 	}
 }
 
-static void response_handler(void *context, const char *response)
+static void response_handler(const char *response)
 {
-	ARG_UNUSED(context);
-
 	/* Forward the data over UART */
 	write_uart_string(response);
 }
 
 static void cmd_send(struct k_work *work)
 {
-	char              str[25];
-	enum at_cmd_state state;
 	int               err;
 
 	ARG_UNUSED(work);
 
-	err = at_cmd_write(at_buf, at_buf,
-			   sizeof(at_buf), &state);
+    /* Sending through string format rather than raw buffer in case
+     * the buffer contains characters that need to be escaped
+     */
+	err = nrf_modem_at_cmd(at_buf, sizeof(at_buf), "%s", at_buf);
 	if (err < 0) {
 		LOG_ERR("Error while processing AT command: %d", err);
-		state = AT_CMD_ERROR;
 	}
 
-	/* Handle the various error responses from modem */
-	switch (state) {
-	case AT_CMD_OK:
-		write_uart_string(at_buf);
-		write_uart_string(OK_STR);
-		break;
-	case AT_CMD_ERROR:
-		write_uart_string(ERROR_STR);
-		break;
-	case AT_CMD_ERROR_CMS:
-		sprintf(str, "+CMS ERROR: %d\r\n", err);
-		write_uart_string(str);
-		break;
-	case AT_CMD_ERROR_CME:
-		sprintf(str, "+CME ERROR: %d\r\n", err);
-		write_uart_string(str);
-		break;
-	default:
-		break;
-	}
+	write_uart_string(at_buf);
 
+	at_buf_busy = false;
 	uart_irq_rx_enable(uart_dev);
 }
 
-static void uart_rx_handler(u8_t character)
+static void uart_rx_handler(uint8_t character)
 {
 	static bool inside_quotes;
 	static size_t at_cmd_len;
@@ -186,16 +153,28 @@ send:
 	inside_quotes = false;
 	at_cmd_len = 0;
 
+	/* Check for the presence of one printable non-whitespace character */
+	for (const char *c = at_buf;; c++) {
+		if (*c > ' ') {
+			break;
+		} else if (*c == '\0') {
+			return; /* Drop command, if it has no such character */
+		}
+	}
+
 	/* Send the command, if there is one to send */
 	if (at_buf[0]) {
 		uart_irq_rx_disable(uart_dev); /* Stop UART to protect at_buf */
+		at_buf_busy = true;
 		k_work_submit_to_queue(&at_host_work_q, &cmd_send_work);
 	}
 }
 
-static void isr(struct device *dev)
+static void isr(const struct device *dev, void *user_data)
 {
-	u8_t character;
+	ARG_UNUSED(user_data);
+
+	uint8_t character;
 
 	uart_irq_update(dev);
 
@@ -207,7 +186,7 @@ static void isr(struct device *dev)
 	 * Check that we are not sending data (buffer must be preserved then),
 	 * and that a new character is available before handling each character
 	 */
-	while ((!k_work_pending(&cmd_send_work)) &&
+	while ((!at_buf_busy) &&
 	       (uart_fifo_read(dev, &character, 1))) {
 		uart_rx_handler(character);
 	}
@@ -216,7 +195,7 @@ static void isr(struct device *dev)
 static int at_uart_init(char *uart_dev_name)
 {
 	int err;
-	u8_t dummy;
+	uint8_t dummy;
 
 	uart_dev = device_get_binding(uart_dev_name);
 	if (uart_dev == NULL) {
@@ -224,7 +203,7 @@ static int at_uart_init(char *uart_dev_name)
 		return -EINVAL;
 	}
 
-	u32_t start_time = k_uptime_get_32();
+	uint32_t start_time = k_uptime_get_32();
 
 	/* Wait for the UART line to become valid */
 	do {
@@ -243,7 +222,7 @@ static int at_uart_init(char *uart_dev_name)
 			while (uart_fifo_read(uart_dev, &dummy, 1)) {
 				/* Do nothing with the data */
 			}
-			k_sleep(10);
+			k_sleep(K_MSEC(10));
 		}
 	} while (err);
 
@@ -251,7 +230,7 @@ static int at_uart_init(char *uart_dev_name)
 	return err;
 }
 
-static int at_host_init(struct device *arg)
+static int at_host_init(const struct device *arg)
 {
 	char *uart_dev_name;
 	int err;
@@ -283,12 +262,6 @@ static int at_host_init(struct device *arg)
 		return -EINVAL;
 	}
 
-	err = at_notif_register_handler(NULL, response_handler);
-	if (err != 0) {
-		LOG_ERR("Can't register handler err=%d", err);
-		return err;
-	}
-
 	/* Initialize the UART module */
 	err = at_uart_init(uart_dev_name);
 	if (err) {
@@ -297,9 +270,9 @@ static int at_host_init(struct device *arg)
 	}
 
 	k_work_init(&cmd_send_work, cmd_send);
-	k_work_q_start(&at_host_work_q, at_host_stack_area,
-		       K_THREAD_STACK_SIZEOF(at_host_stack_area),
-		       CONFIG_AT_HOST_THREAD_PRIO);
+	k_work_queue_start(&at_host_work_q, at_host_stack_area,
+			   K_THREAD_STACK_SIZEOF(at_host_stack_area),
+			   CONFIG_AT_HOST_THREAD_PRIO, NULL);
 	uart_irq_rx_enable(uart_dev);
 
 	return err;

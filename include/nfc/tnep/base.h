@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #ifndef NFC_TNEP_BASE_H_
@@ -15,7 +15,7 @@
  */
 
 #include <stddef.h>
-#include <nfc/ndef/nfc_ndef_msg.h>
+#include <nfc/ndef/msg.h>
 #include <nfc/ndef/tnep_rec.h>
 
 /** TNEP Version.

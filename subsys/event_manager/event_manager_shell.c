@@ -1,14 +1,13 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdlib.h>
 #include <shell/shell.h>
 #include <event_manager.h>
 
-u32_t event_manager_displayed_events;
 
 static int show_events(const struct shell *shell, size_t argc,
 		char **argv)
@@ -16,15 +15,15 @@ static int show_events(const struct shell *shell, size_t argc,
 	shell_fprintf(shell, SHELL_NORMAL,
 		      "Registered Events:\n");
 
-	for (const struct event_type *et = __start_event_types;
-	     (et != NULL) && (et != __stop_event_types); et++) {
+	for (const struct event_type *et = _event_type_list_start;
+	     (et != NULL) && (et != _event_type_list_end); et++) {
 
-		size_t ev_id = et - __start_event_types;
+		size_t ev_id = et - _event_type_list_start;
 
 		shell_fprintf(shell,
 			      SHELL_NORMAL,
 			      "%c %d:\t%s\n",
-			      (event_manager_displayed_events & BIT(ev_id)) ?
+			      (atomic_test_bit(_event_manager_event_display_bm.flags, ev_id)) ?
 				'E' : 'D',
 			      ev_id,
 			      et->name);
@@ -37,10 +36,8 @@ static int show_listeners(const struct shell *shell, size_t argc,
 		char **argv)
 {
 	shell_fprintf(shell, SHELL_NORMAL, "Registered Listeners:\n");
-	for (const struct event_listener *el = __start_event_listeners;
-	     el != __stop_event_listeners;
-	     el++) {
 
+	STRUCT_SECTION_FOREACH(event_listener, el) {
 		__ASSERT_NO_MSG(el != NULL);
 		shell_fprintf(shell, SHELL_NORMAL, "|\t[L:%s]\n", el->name);
 	}
@@ -52,31 +49,26 @@ static int show_subscribers(const struct shell *shell, size_t argc,
 		char **argv)
 {
 	shell_fprintf(shell, SHELL_NORMAL, "Registered Subscribers:\n");
-	for (const struct event_type *et = __start_event_types;
-	     (et != NULL) && (et != __stop_event_types);
-	     et++) {
 
+	STRUCT_SECTION_FOREACH(event_type, et) {
 		bool is_subscribed = false;
 
-		for (size_t prio = SUBS_PRIO_MIN;
-		     prio <= SUBS_PRIO_MAX;
-		     prio++) {
-			for (const struct event_subscriber *es =
-					et->subs_start[prio];
-			     es != et->subs_stop[prio];
-			     es++) {
+		for (const struct event_subscriber *es =
+				et->subs_start;
+			es != et->subs_stop;
+			es++) {
 
-				__ASSERT_NO_MSG(es != NULL);
-				const struct event_listener *el = es->listener;
+			__ASSERT_NO_MSG(es != NULL);
+			const struct event_listener *el = es->listener;
 
-				__ASSERT_NO_MSG(el != NULL);
-				shell_fprintf(shell, SHELL_NORMAL,
-					      "|\tprio:%u\t[E:%s] -> [L:%s]\n",
-					      prio, et->name, el->name);
+			__ASSERT_NO_MSG(el != NULL);
+			shell_fprintf(shell, SHELL_NORMAL,
+					"|\t[E:%s] -> [L:%s]\n",
+				et->name, el->name);
 
-				is_subscribed = true;
-			}
+			is_subscribed = true;
 		}
+
 
 		if (!is_subscribed) {
 			shell_fprintf(shell, SHELL_NORMAL,
@@ -92,17 +84,15 @@ static int show_subscribers(const struct shell *shell, size_t argc,
 static void set_event_displaying(const struct shell *shell, size_t argc,
 				 char **argv, bool enable)
 {
-	u32_t evt_mask = 0;
-
 	/* If no IDs specified, all registered events are affected */
 	if (argc == 1) {
-		for (const struct event_type *et = __start_event_types;
-		     (et != NULL) && (et != __stop_event_types);
+		for (const struct event_type *et = _event_type_list_start;
+		     (et != NULL) && (et != _event_type_list_end);
 		     et++) {
 
-			size_t ev_id = et - __start_event_types;
+			size_t ev_id = et - _event_type_list_start;
 
-			evt_mask |= BIT(ev_id);
+			atomic_set_bit_to(_event_manager_event_display_bm.flags, ev_id, enable);
 		}
 
 		shell_fprintf(shell,
@@ -118,7 +108,7 @@ static void set_event_displaying(const struct shell *shell, size_t argc,
 			event_indexes[i] = strtol(argv[i + 1], &end, 10);
 
 			if ((event_indexes[i] < 0)
-			    || (event_indexes[i] >= __stop_event_types - __start_event_types)
+			    || (event_indexes[i] >= _event_type_list_end - _event_type_list_start)
 			    || (*end != '\0')) {
 
 				shell_error(shell, "Invalid event ID: %s",
@@ -128,9 +118,10 @@ static void set_event_displaying(const struct shell *shell, size_t argc,
 		}
 
 		for (size_t i = 0; i < ARRAY_SIZE(event_indexes); i++) {
-			evt_mask |= BIT(event_indexes[i]);
+			atomic_set_bit_to(_event_manager_event_display_bm.flags, event_indexes[i],
+					  enable);
 			const struct event_type *et =
-				__start_event_types + event_indexes[i];
+				_event_type_list_start + event_indexes[i];
 			const char *event_name = et->name;
 
 			shell_fprintf(shell,
@@ -139,11 +130,6 @@ static void set_event_displaying(const struct shell *shell, size_t argc,
 				      event_name,
 				      enable ? "en":"dis");
 		}
-	}
-	if (enable) {
-		event_manager_displayed_events |= evt_mask;
-	} else {
-		event_manager_displayed_events &= ~evt_mask;
 	}
 }
 
@@ -170,10 +156,10 @@ SHELL_STATIC_SUBCMD_SET_CREATE(sub_event_manager,
 	SHELL_CMD_ARG(show_events, NULL, "Show events", show_events, 0, 0),
 	SHELL_CMD_ARG(disable, NULL, "Disable displaying event with given ID",
 		      disable_event_displaying, 0,
-		      sizeof(event_manager_displayed_events) * 8 - 1),
+		      sizeof(_event_manager_event_display_bm) * 8 - 1),
 	SHELL_CMD_ARG(enable, NULL, "Enable displaying event with given ID",
 		      enable_event_displaying, 0,
-		      sizeof(event_manager_displayed_events) * 8 - 1),
+		      sizeof(_event_manager_event_display_bm) * 8 - 1),
 	SHELL_SUBCMD_SET_END
 );
 

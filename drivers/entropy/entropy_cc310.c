@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <init.h>
@@ -12,63 +12,137 @@
 
 #include <zephyr.h>
 #include <drivers/entropy.h>
-
-#if CONFIG_ENTROPY_CC310
+#include <sys/util.h>
 
 #if defined(CONFIG_SPM)
 #include "secure_services.h"
+#elif defined(CONFIG_BUILD_WITH_TFM)
+#include <psa/crypto.h>
+#include <psa/crypto_extra.h>
+#include <tfm_ns_interface.h>
 #else
-#include "nrf_cc310_platform_entropy.h"
+#include "nrf_cc3xx_platform_ctr_drbg.h"
 #endif
 
-static int entropy_cc310_rng_get_entropy(struct device *dev, u8_t *buffer,
-					 u16_t length)
+#define CTR_DRBG_MAX_REQUEST 1024
+
+static int entropy_cc3xx_rng_get_entropy(
+	const struct device *dev,
+	uint8_t *buffer,
+	uint16_t length)
 {
 	int res = -EINVAL;
-	size_t olen;
 
 	__ASSERT_NO_MSG(dev != NULL);
 	__ASSERT_NO_MSG(buffer != NULL);
 
-#if defined(CONFIG_SPM)
-	/** This is a call from a non-secure app that enables secure services,
-	 *  in which case entropy is gathered by calling through SPM
-	 */
-	res = spm_request_random_number(buffer, length, &olen);
-	if (olen != length) {
+
+#if defined(CONFIG_BUILD_WITH_TFM)
+
+	res = psa_generate_random(buffer, length);
+	if (res != PSA_SUCCESS) {
 		return -EINVAL;
 	}
 
 #else
-	/** This is a call from a secure app, in which case entropy is gathered
-	 *  using CC310 HW using the nrf_cc310_platform library.
+	size_t olen;
+	size_t offset = 0;
+	size_t chunk_size = CTR_DRBG_MAX_REQUEST;
+	/** This is a call from a secure app, in which case entropy is
+	 *  gathered using CC3xx HW using the CTR_DRBG features of the
+	 *  nrf_cc310_platform/nrf_cc312_platform library.
 	 */
-	res = nrf_cc310_platform_entropy_get(buffer, length, &olen);
-	if (olen != length) {
-		return -EINVAL;
+	while (offset < length) {
+
+		if ((length - offset) < CTR_DRBG_MAX_REQUEST) {
+			chunk_size = length - offset;
+		}
+
+		#if defined(CONFIG_SPM)
+			/** This is a call from a non-secure app that
+			 * enables secure services, in which case entropy
+			 * is gathered by calling through SPM.
+			 */
+			res = spm_request_random_number(buffer + offset,
+								chunk_size,
+								&olen);
+		#else
+			/** This is a call from a secure app, in which
+			 * case entropy is gathered using CC3xx HW
+			 * using the CTR_DRBG features of the
+			 * nrf_cc310_platform/nrf_cc312_platform library.
+			 * When the given context is NULL, a global internal
+			 * ctr_drbg context is being used.
+			 */
+			res = nrf_cc3xx_platform_ctr_drbg_get(NULL,
+										buffer + offset,
+										chunk_size,
+										&olen);
+		#endif
+
+		if (olen != chunk_size) {
+			return -EINVAL;
+		}
+
+		if (res != 0) {
+			break;
+		}
+
+		offset += chunk_size;
 	}
 #endif
 
 	return res;
 }
 
-static int entropy_cc310_rng_init(struct device *dev)
+static int entropy_cc3xx_rng_init(const struct device *dev)
 {
-	/* No initialization is required */
 	(void)dev;
+
+	#if defined(CONFIG_BUILD_WITH_TFM)
+		int ret = -1;
+
+		ret = psa_crypto_init();
+		if (ret != PSA_SUCCESS) {
+			return -EINVAL;
+		}
+
+	#elif !defined(CONFIG_SPM)
+		int ret = 0;
+
+		/* When the given context is NULL, a global internal
+		 * ctr_drbg context is being used.
+		 */
+		ret = nrf_cc3xx_platform_ctr_drbg_init(NULL, NULL, 0);
+		if (ret != 0) {
+			return -EINVAL;
+		}
+	#endif
 
 	return 0;
 }
 
-static const struct entropy_driver_api entropy_cc310_rng_api = {
-	.get_entropy = entropy_cc310_rng_get_entropy
+static const struct entropy_driver_api entropy_cc3xx_rng_api = {
+	.get_entropy = entropy_cc3xx_rng_get_entropy
 };
 
-DEVICE_AND_API_INIT(entropy_cc310_rng, CONFIG_ENTROPY_NAME,
-		    &entropy_cc310_rng_init,
-		    NULL,
-		    NULL,
-		    POST_KERNEL, CONFIG_KERNEL_INIT_PRIORITY_DEVICE,
-		    &entropy_cc310_rng_api);
+#if DT_NODE_HAS_STATUS(DT_NODELABEL(cryptocell), okay)
+#define CRYPTOCELL_NODE_ID DT_NODELABEL(cryptocell)
+#elif DT_NODE_HAS_STATUS(DT_NODELABEL(cryptocell_sw), okay)
+#define CRYPTOCELL_NODE_ID DT_NODELABEL(cryptocell_sw)
+#else
+/*
+ * TODO is there a better way to handle this?
+ *
+ * The problem is that when this driver is configured for use by
+ * non-secure applications, calling through SPM leaves our application
+ * devicetree without an actual cryptocell node, so we fall back on
+ * cryptocell_sw. This works, but it's a bit hacky and requires an out
+ * of tree zephyr patch.
+ */
+#error "No cryptocell or cryptocell_sw node labels in the devicetree"
+#endif
 
-#endif /* CONFIG_ENTROPY_CC310 */
+DEVICE_DT_DEFINE(CRYPTOCELL_NODE_ID, entropy_cc3xx_rng_init,
+		 NULL, NULL, NULL, PRE_KERNEL_1,
+		 CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &entropy_cc3xx_rng_api);

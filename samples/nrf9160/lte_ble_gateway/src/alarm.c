@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2018 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 #include <string.h>
 #include <stdbool.h>
 #include <sys/printk.h>
-#include <nrf_cloud.h>
+#include <net/nrf_cloud.h>
 
 #include "alarm.h"
 
@@ -16,6 +16,8 @@ static bool alarm_pending;
 
 extern void sensor_data_send(struct nrf_cloud_sensor_data *data);
 
+extern struct k_work_delayable aggregated_work;
+
 char *orientation_strings[] = {"LEFT", "NORMAL", "RIGHT", "UPSIDE_DOWN"};
 
 void alarm(void)
@@ -23,9 +25,11 @@ void alarm(void)
 	alarm_pending = true;
 }
 
-void send_aggregated_data(void)
+void send_aggregated_data(struct k_work *work)
 {
-	static u8_t gps_data_buffer[GPS_NMEA_SENTENCE_MAX_LENGTH];
+	ARG_UNUSED(work);
+
+	static uint8_t gps_data_buffer[GPS_NMEA_SENTENCE_MAX_LENGTH];
 
 	static struct nrf_cloud_sensor_data gps_cloud_data = {
 		.type = NRF_CLOUD_SENSOR_GPS,
@@ -37,6 +41,8 @@ void send_aggregated_data(void)
 	};
 
 	struct sensor_data aggregator_data;
+
+	k_work_schedule(&aggregated_work, K_MSEC(100));
 
 	if (!alarm_pending) {
 		return;
@@ -72,7 +78,7 @@ void send_aggregated_data(void)
 			gps_cloud_data.data.ptr = &aggregator_data.data[4];
 			gps_cloud_data.data.len = aggregator_data.length;
 			gps_cloud_data.tag =
-			    *((u32_t *)&aggregator_data.data[0]);
+			    *((uint32_t *)&aggregator_data.data[0]);
 			sensor_data_send(&gps_cloud_data);
 			break;
 

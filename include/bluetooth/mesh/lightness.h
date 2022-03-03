@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 /**
@@ -21,14 +21,21 @@
 extern "C" {
 #endif
 
+/** Minimum permitted Lightness level */
+#define BT_MESH_LIGHTNESS_MIN 0
+/** Maximum permitted Lightness level */
+#define BT_MESH_LIGHTNESS_MAX UINT16_MAX
+
 /** Lightness set message parameters. */
 struct bt_mesh_lightness_set {
 	/** Lightness level. */
-	u16_t lvl;
+	uint16_t lvl;
 	/**
-	 * Transition time parameters for the state change. Setting the
-	 * transition to NULL makes the server use its default transition time
-	 * parameters.
+	 * Transition time parameters for the state change, or NULL.
+	 *
+	 * When sending, setting the transition to NULL makes the receiver use
+	 * its default transition time parameters, or 0 if no default transition
+	 * time is set.
 	 */
 	const struct bt_mesh_model_transition *transition;
 };
@@ -36,20 +43,21 @@ struct bt_mesh_lightness_set {
 /** Lightness status message parameters. */
 struct bt_mesh_lightness_status {
 	/** Current Lightness level. */
-	u16_t current;
+	uint16_t current;
 	/** Target Lightness level. */
-	u16_t target;
+	uint16_t target;
 	/**
-	 * Time remaining of the ongoing transition, or @ref K_FOREVER.
-	 * If there's no ongoing transition, @c remaining_time is 0.
+	 * Time remaining of the ongoing transition in milliseconds, or
+	 * @em SYS_FOREVER_MS. If there's no ongoing transition,
+	 * @c remaining_time is 0.
 	 */
-	s32_t remaining_time;
+	int32_t remaining_time;
 };
 
 /** Lightness range parameters. */
 struct bt_mesh_lightness_range {
-	u16_t min; /**< Minimum allowed level. */
-	u16_t max; /**< Maximum allowed level. */
+	uint16_t min; /**< Minimum allowed level. */
+	uint16_t max; /**< Maximum allowed level. */
 };
 
 /** Lightness range message parameters. */

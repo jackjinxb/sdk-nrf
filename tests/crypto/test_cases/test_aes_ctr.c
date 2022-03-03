@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2019 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
@@ -50,17 +50,8 @@ static size_t key_len;
 static size_t iv_len;
 static size_t ad_len;
 
-void aes_ctr_clear_buffers(void)
-{
-	memset(m_aes_input_buf, 0xFF, sizeof(m_aes_input_buf));
-	memset(m_aes_output_buf, 0xFF, sizeof(m_aes_output_buf));
-	memset(m_aes_expected_output_buf, 0xFF,
-	       sizeof(m_aes_expected_output_buf));
-	memset(m_prev_aes_output_buf, 0x00, sizeof(m_prev_aes_output_buf));
-	memset(m_aes_key_buf, 0x00, sizeof(m_aes_key_buf));
-	memset(m_aes_iv_buf, 0xFF, sizeof(m_aes_iv_buf));
-	memset(m_aes_temp_buf, 0x00, sizeof(m_aes_temp_buf));
-}
+void aes_ctr_clear_buffers(void);
+void unhexify_aes_ctr(void);
 
 static int cipher_init(mbedtls_cipher_context_t *p_ctx, size_t key_len_bytes,
 		       mbedtls_cipher_mode_t mode)
@@ -109,58 +100,70 @@ static int cipher_crypt(mbedtls_cipher_context_t *p_ctx, size_t iv_len,
 				    m_aes_output_buf, &crypt_len);
 }
 
-__attribute__((noinline)) static void unhexify_aes(void)
-{
-	bool encrypt = p_test_vector->direction == MBEDTLS_ENCRYPT;
-
-	key_len = hex2bin(p_test_vector->p_key, strlen(p_test_vector->p_key),
-			  m_aes_key_buf, strlen(p_test_vector->p_key));
-	iv_len = hex2bin(p_test_vector->p_iv, strlen(p_test_vector->p_iv),
-			 m_aes_iv_buf, strlen(p_test_vector->p_iv));
-	ad_len = hex2bin(p_test_vector->p_ad, strlen(p_test_vector->p_ad),
-			 m_aes_temp_buf, strlen(p_test_vector->p_ad));
-
-	if (encrypt) {
-		input_len = hex2bin(p_test_vector->p_plaintext,
-				    strlen(p_test_vector->p_plaintext),
-				    m_aes_input_buf,
-				    strlen(p_test_vector->p_plaintext));
-		output_len = hex2bin(p_test_vector->p_ciphertext,
-				     strlen(p_test_vector->p_ciphertext),
-				     m_aes_expected_output_buf,
-				     strlen(p_test_vector->p_ciphertext));
-	} else {
-		input_len = hex2bin(p_test_vector->p_ciphertext,
-				    strlen(p_test_vector->p_ciphertext),
-				    m_aes_input_buf,
-				    strlen(p_test_vector->p_ciphertext));
-		output_len = hex2bin(p_test_vector->p_plaintext,
-				     strlen(p_test_vector->p_plaintext),
-				     m_aes_expected_output_buf,
-				     strlen(p_test_vector->p_plaintext));
-	}
-}
-
 static void aes_ctr_setup_functional(void)
 {
-	aes_ctr_clear_buffers();
-
 	static int i;
+
+	aes_ctr_clear_buffers();
 	p_test_vector =
 		ITEM_GET(test_vector_aes_ctr_func_data, test_vector_aes_t, i++);
 
-	unhexify_aes();
+	unhexify_aes_ctr();
 }
 
 static void aes_ctr_setup(void)
 {
+	static int i;
+
 	aes_ctr_clear_buffers();
 
-	static int i;
 	p_test_vector =
 		ITEM_GET(test_vector_aes_ctr_data, test_vector_aes_t, i++);
 
-	unhexify_aes();
+	unhexify_aes_ctr();
+}
+
+void aes_ctr_clear_buffers(void)
+{
+	memset(m_aes_input_buf, 0xFF, sizeof(m_aes_input_buf));
+	memset(m_aes_output_buf, 0xFF, sizeof(m_aes_output_buf));
+	memset(m_aes_expected_output_buf, 0xFF,
+	       sizeof(m_aes_expected_output_buf));
+	memset(m_prev_aes_output_buf, 0x00, sizeof(m_prev_aes_output_buf));
+	memset(m_aes_key_buf, 0x00, sizeof(m_aes_key_buf));
+	memset(m_aes_iv_buf, 0xFF, sizeof(m_aes_iv_buf));
+	memset(m_aes_temp_buf, 0x00, sizeof(m_aes_temp_buf));
+}
+
+__attribute__((noinline)) void unhexify_aes_ctr(void)
+{
+	bool encrypt = p_test_vector->direction == MBEDTLS_ENCRYPT;
+
+	key_len = hex2bin_safe(p_test_vector->p_key,
+			       m_aes_key_buf,
+			       sizeof(m_aes_key_buf));
+	iv_len = hex2bin_safe(p_test_vector->p_iv,
+			      m_aes_iv_buf,
+			      sizeof(m_aes_iv_buf));
+	ad_len = hex2bin_safe(p_test_vector->p_ad,
+			      m_aes_temp_buf,
+			      sizeof(m_aes_temp_buf));
+
+	if (encrypt) {
+		input_len = hex2bin_safe(p_test_vector->p_plaintext,
+					 m_aes_input_buf,
+					 sizeof(m_aes_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					  m_aes_expected_output_buf,
+					  sizeof(m_aes_expected_output_buf));
+	} else {
+		input_len = hex2bin_safe(p_test_vector->p_ciphertext,
+					 m_aes_input_buf,
+					 sizeof(m_aes_input_buf));
+		output_len = hex2bin_safe(p_test_vector->p_plaintext,
+					  m_aes_expected_output_buf,
+					  sizeof(m_aes_expected_output_buf));
+	}
 }
 
 /**@brief Function for the AES functional test execution.
@@ -200,7 +203,7 @@ void exec_test_case_aes_ctr_functional(void)
 
 	/* Reset buffers and fetch test vectors. */
 	aes_ctr_clear_buffers();
-	unhexify_aes();
+	unhexify_aes_ctr();
 
 	err_code = cipher_init(&ctx, key_len, p_test_vector->mode);
 	TEST_VECTOR_ASSERT_EQUAL(0, err_code);
@@ -365,6 +368,7 @@ void exec_test_case_aes_monte_carlo(void)
 		err_code = monte_carlo(p_test_vector, &ctx, key_len, iv_len,
 				       input_len, output_len);
 	} while ((err_code == p_test_vector->expected_err_code) && (++k < 100));
+	stop_time_measurement();
 
 	LOG_HEXDUMP_DBG(m_aes_output_buf, output_len, "m_aes_output_buf final");
 	LOG_HEXDUMP_DBG(m_aes_expected_output_buf, output_len,
@@ -374,8 +378,6 @@ void exec_test_case_aes_monte_carlo(void)
 	TEST_VECTOR_MEMCMP_ASSERT(m_aes_expected_output_buf, m_aes_output_buf,
 				  output_len, p_test_vector->expected_result,
 				  "Incorrect generated AES ciphertext");
-
-	stop_time_measurement();
 
 	/* Un-initialize resources. */
 	mbedtls_cipher_free(&ctx);

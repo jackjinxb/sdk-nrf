@@ -1,22 +1,26 @@
 #
 # Copyright (c) 2020 Nordic Semiconductor
 #
-# SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
 #
 
-cmake_minimum_required(VERSION 3.8.2)
+cmake_minimum_required(VERSION 3.20.0)
 
-set(NRF_SUPPORTED_BOARDS
-	nrf5340_dk_nrf5340_cpunet
-	nrf52_pca10040
-	nrf52840_pca10056
-)
-
-include($ENV{ZEPHYR_BASE}/../nrf/cmake/boilerplate.cmake)
-include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
+find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 project(NONE)
 
+# Application sources
+target_sources_ifdef(CONFIG_FEM app
+			PRIVATE ../../bluetooth/direct_test_mode/src/fem/fem.c)
+target_sources_ifdef(CONFIG_NRF21540_FEM app
+			PRIVATE ../../bluetooth/direct_test_mode/src/fem/nrf21540.c)
+target_sources_ifdef(CONFIG_GENERIC_FEM app
+			PRIVATE ../../bluetooth/direct_test_mode/src/fem/generic_fem.c)
+zephyr_include_directories(../../bluetooth/direct_test_mode/src/fem/)
+
 FILE(GLOB app_sources src/*.c)
+# NORDIC SDK APP START
 target_sources(app PRIVATE
 	${app_sources}
 )
+# NORDIC SDK APP END

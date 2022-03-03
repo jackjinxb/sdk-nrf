@@ -1,12 +1,12 @@
 /*
  * Copyright (c) 2020 Nordic Semiconductor ASA
  *
- * SPDX-License-Identifier: LicenseRef-BSD-5-Clause-Nordic
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
 #include <stdio.h>
 #include <zephyr.h>
-#include <power/power.h>
+#include <pm/pm.h>
 
 #include <nrfx.h>
 #include <hal/nrf_power.h>
@@ -15,8 +15,8 @@
 #endif
 
 #include <nfc_t2t_lib.h>
-#include <nfc/ndef/nfc_ndef_msg.h>
-#include <nfc/ndef/nfc_text_rec.h>
+#include <nfc/ndef/msg.h>
+#include <nfc/ndef/text_rec.h>
 
 #include <dk_buttons_and_leds.h>
 
@@ -31,15 +31,15 @@
 
 
 /* Delayed work that enters system off. */
-static struct k_delayed_work system_off_work;
+static struct k_work_delayable system_off_work;
 
 
 /**
  * @brief Function that receives events from NFC.
  */
 static void nfc_callback(void *context,
-			 enum nfc_t2t_event event,
-			 const u8_t *data,
+			 nfc_t2t_event_t event,
+			 const uint8_t *data,
 			 size_t data_length)
 {
 	ARG_UNUSED(context);
@@ -49,12 +49,12 @@ static void nfc_callback(void *context,
 	switch (event) {
 	case NFC_T2T_EVENT_FIELD_ON:
 		/* Cancel entering system off */
-		k_delayed_work_cancel(&system_off_work);
+		k_work_cancel_delayable(&system_off_work);
 		dk_set_led_on(NFC_FIELD_LED);
 		break;
 	case NFC_T2T_EVENT_FIELD_OFF:
 		/* Enter system off after delay */
-		k_delayed_work_submit(&system_off_work,
+		k_work_reschedule(&system_off_work,
 				K_SECONDS(SYSTEM_OFF_DELAY_S));
 		dk_set_led_off(NFC_FIELD_LED);
 		break;
@@ -70,13 +70,13 @@ static void nfc_callback(void *context,
 static int start_nfc(void)
 {
 	/* Text message in its language code. */
-	static const u8_t en_payload[] = {
+	static const uint8_t en_payload[] = {
 		'H', 'e', 'l', 'l', 'o', ' ', 'W', 'o', 'r', 'l', 'd', '!'
 	};
-	static const u8_t en_code[] = {'e', 'n'};
+	static const uint8_t en_code[] = {'e', 'n'};
 
 	/* Buffer used to hold an NFC NDEF message. */
-	static u8_t buffer[NDEF_MSG_BUF_SIZE];
+	static uint8_t buffer[NDEF_MSG_BUF_SIZE];
 
 	NFC_NDEF_TEXT_RECORD_DESC_DEF(nfc_text_rec,
 				      UTF_8,
@@ -87,7 +87,7 @@ static int start_nfc(void)
 
 	NFC_NDEF_MSG_DEF(nfc_text_msg, MAX_REC_COUNT);
 
-	u32_t len = sizeof(buffer);
+	uint32_t len = sizeof(buffer);
 
 	/* Set up NFC */
 	if (nfc_t2t_setup(nfc_callback, NULL) < 0) {
@@ -137,7 +137,7 @@ static void system_off(struct k_work *work)
 	/* Before we disabled entry to deep sleep. Here we need to override
 	 * that, then force a sleep so that the deep sleep takes effect.
 	 */
-	sys_pm_force_power_state(SYS_POWER_STATE_DEEP_SLEEP_1);
+	pm_power_state_force(0, (struct pm_state_info){PM_STATE_SOFT_OFF, 0, 0});
 
 	dk_set_led_off(SYSTEM_ON_LED);
 
@@ -161,7 +161,7 @@ static void system_off(struct k_work *work)
  */
 static void print_reset_reason(void)
 {
-	u32_t reas;
+	uint32_t reas;
 
 #if NRF_POWER_HAS_RESETREAS
 
@@ -209,8 +209,8 @@ void main(void)
 	dk_set_led_on(SYSTEM_ON_LED);
 
 	/* Configure and start delayed work that enters system off */
-	k_delayed_work_init(&system_off_work, system_off);
-	k_delayed_work_submit(&system_off_work, K_SECONDS(SYSTEM_OFF_DELAY_S));
+	k_work_init_delayable(&system_off_work, system_off);
+	k_work_reschedule(&system_off_work, K_SECONDS(SYSTEM_OFF_DELAY_S));
 
 	/* Show last reset reason */
 	print_reset_reason();
@@ -222,7 +222,7 @@ void main(void)
 	}
 
 	/* Prevent deep sleep (system off) from being entered */
-	sys_pm_ctrl_disable_state(SYS_POWER_STATE_DEEP_SLEEP_1);
+	pm_constraint_set(PM_STATE_SOFT_OFF);
 
 	/* Exit main function - the rest will be done by the callbacks */
 }

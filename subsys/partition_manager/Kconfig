@@ -1,0 +1,138 @@
+#
+# Copyright (c) 2020 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "Partition Manager"
+
+config PARTITION_MANAGER_ENABLED
+	bool "Partition manager is enabled (read-only option)"
+	help
+	  Option which can be checked to see whether or not the
+	  partition manager is enabled in the current build. Note that this
+	  should ideally be a hidden option, but it can't due to limitations
+	  in how parent images impose options on child images. Don't
+	  change the value of this option.
+
+# Override this option to use custom flash map implementation when partition
+# manager is enabled.
+config FLASH_MAP_CUSTOM
+	bool
+	default y
+	depends on PARTITION_MANAGER_ENABLED
+
+# These values are now set by partition manager, so hide the option.
+config SRAM_SIZE
+	int
+	depends on !PARTITION_MANAGER_ENABLED
+
+# These values are now set by partition manager, so hide the option.
+config SRAM_BASE_ADDRESS
+	hex
+	depends on !PARTITION_MANAGER_ENABLED
+
+menu "Zephyr subsystem configurations"
+
+DT_CHOSEN_Z_IPC_SHM := zephyr,ipc_shm
+
+config RPMSG_NRF53_SRAM_SIZE
+	hex "RPMsg shared memory size"
+	default "$(dt_chosen_reg_size_hex,$(DT_CHOSEN_Z_IPC_SHM))"
+	depends on RPMSG_SERVICE && SOC_NRF5340_CPUAPP
+	depends on PARTITION_MANAGER_ENABLED
+	help
+	  This option specifies size of the memory region to be used
+	  for the RPMsg shared memory
+
+if FILE_SYSTEM_LITTLEFS
+partition=LITTLEFS
+partition-size=0x6000
+rsource "Kconfig.template.partition_size"
+endif
+
+
+if SETTINGS
+partition=SETTINGS_STORAGE
+partition-size=0x2000
+rsource "Kconfig.template.partition_size"
+endif
+
+if NVS && !SETTINGS_NVS
+partition=NVS_STORAGE
+partition-size=0x6000
+rsource "Kconfig.template.partition_size"
+endif
+
+if ZIGBEE && !SOC_NRF52833
+partition=ZBOSS_NVRAM
+partition-size=0x8000
+rsource "Kconfig.template.partition_size"
+endif
+
+if ZIGBEE && SOC_NRF52833
+partition=ZBOSS_NVRAM
+partition-size=0x4000
+rsource "Kconfig.template.partition_size"
+endif
+
+if ZIGBEE
+partition=ZBOSS_PRODUCT_CONFIG
+partition-size=0x1000
+rsource "Kconfig.template.partition_size"
+endif
+
+endmenu # Zephyr subsystem configurations
+menu "NCS subsystem configurations"
+
+endmenu # NCS subsystem configurations
+
+config PM_SINGLE_IMAGE
+	bool "Use the Partition Manager for single image builds" if !BUILD_WITH_TFM
+	default y if BUILD_WITH_TFM
+	select PARTITION_MANAGER_ENABLED
+	help
+	  Use the Partition Manager feature to partition the device even if
+	  only a single image is included in the build. This is typically set
+	  when a subsystem that defines its own Partition Manager configuration
+	  is included in the build.
+
+	  The option is always defined in builds where a TF-M image for the
+	  Secure Execution environment is generated.
+
+DT_CHOSEN_EXT_FLASH:= nordic,pm-ext-flash
+
+config PM_EXTERNAL_FLASH_BASE
+	hex "External flash base address"
+	default 0
+
+config PM_EXTERNAL_FLASH_MCUBOOT_SECONDARY
+	bool "Place MCUboot secondary in external flash"
+	depends on BOOTLOADER_MCUBOOT || MCUBOOT
+	# Only depend on the chosen for the parent image. The value of this
+	# option is propagated to the MCUboot child image automatically.
+	depends on $(dt_chosen_enabled,$(DT_CHOSEN_EXT_FLASH)) || MCUBOOT
+	default y if BOOTLOADER_MCUBOOT
+	help
+	  Place the secondary partition of MCUboot in the external flash instead
+	  of the internal flash. This option should only be enabled by the user
+	  in the parent image.
+
+config PM_IMAGE_NOT_BUILT_FROM_SOURCE
+	bool
+	help
+	  Promptless helper config used to indicate that one or more
+	  image is not built from source.
+
+# Helper configs needed since 'SRAM_SIZE/BASE' use the chosen node.
+config PM_SRAM_BASE
+	hex
+	default $(dt_node_reg_addr_hex,/soc/memory@21000000) if SOC_NRF5340_CPUNET
+	default $(dt_node_reg_addr_hex,/soc/memory@20000000)
+
+config PM_SRAM_SIZE
+	hex
+	default $(dt_node_reg_size_hex,/soc/memory@21000000) if SOC_NRF5340_CPUNET
+	default $(dt_node_reg_size_hex,/soc/memory@20000000)
+
+endmenu # Partition Manager
