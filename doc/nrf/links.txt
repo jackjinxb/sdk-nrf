@@ -71,13 +71,7 @@
 .. _`Leshan Demo Server`: https://github.com/eclipse/leshan/blob/master/README.md
 
 .. _`wpantund`: https://github.com/openthread/wpantund/blob/master/README.md
-.. _`wpantund Installation Guide`: https://github.com/openthread/wpantund/blob/master/INSTALL.md
-.. _`wpantund Usage Overview`: https://github.com/openthread/wpantund#user-content-usage-overview
-.. _`CLI wpantund wrapper`: https://github.com/openthread/wpantund/blob/master/doc/wpanctl.1
 
-.. _`Pyspinel`: https://github.com/openthread/pyspinel/blob/main/README.md
-.. _`Pyspinel arguments`: https://github.com/openthread/pyspinel/blob/main/README.md#description
-.. _`Spinel specification properties for Thread`: https://github.com/openthread/spinel-spec/blob/master/thread/detail-properties.md
 .. _`Spinel protocol`: https://github.com/openthread/spinel-spec
 
 .. _`OpenThread POSIX app`: https://github.com/zephyrproject-rtos/openthread/tree/zephyr/src/posix
@@ -91,8 +85,8 @@
 
 .. _`SMP over Bluetooth`: https://github.com/apache/mynewt-mcumgr/blob/master/transport/smp-bluetooth.md
 
-.. _`Android CHIPTool`: https://github.com/nrfconnect/sdk-connectedhomeip/tree/fda0fed2/src/android/CHIPTool
-.. _`other controller setups`: https://github.com/nrfconnect/sdk-connectedhomeip/tree/fda0fed2/src/controller
+.. _`Android CHIPTool`: https://github.com/nrfconnect/sdk-connectedhomeip/tree/4231c6e3/src/android/CHIPTool
+.. _`other controller setups`: https://github.com/nrfconnect/sdk-connectedhomeip/tree/4231c6e3/src/controller
 .. _`ZCL Advanced Platform`: https://github.com/project-chip/zap
 .. _`Matter nRF Connect releases`: https://github.com/nrfconnect/sdk-connectedhomeip/releases
 
@@ -139,6 +133,7 @@
 .. _`nRF Connect SDK latest documentation`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/index.html
 
 .. _`known issues page on the main branch`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/known_issues.html
+.. _`known issues for nRF Connect SDK v1.9.1`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/known_issues.html?v=v1-9-1
 .. _`known issues for nRF Connect SDK v1.9.0`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/known_issues.html?v=v1-9-0
 .. _`known issues for nRF Connect SDK v1.8.0`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/known_issues.html?v=v1-8-0
 .. _`known issues for nRF Connect SDK v1.7.1`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/nrf/known_issues.html?v=v1-7-1
@@ -189,6 +184,13 @@
 .. _`TF-M documentation`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/latest/tfm/index.html
 
 .. _`Repositories and revisions`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.0/nrf/introduction.html#repositories-and-revisions
+.. _`Repositories and revisions for v1.9.1`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.1/nrf/introduction.html#repositories-and-revisions
+
+.. _`Modem library changelog for v1.9.1`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.1/nrfxlib/nrf_modem/doc/CHANGELOG.html#nrf-modem-changelog
+.. _`LwM2M carrier library changelog for v1.9.1`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.1/nrf/libraries/bin/lwm2m_carrier/CHANGELOG.html#liblwm2m-carrier-changelog
+.. _`Modem library changelog for v1.9.0`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.0/nrfxlib/nrf_modem/doc/CHANGELOG.html#nrf-modem-changelog
+.. _`LwM2M carrier library changelog for v1.9.0`: https://developer.nordicsemi.com/nRF_Connect_SDK/doc/1.9.0/nrf/libraries/bin/lwm2m_carrier/CHANGELOG.html#liblwm2m-carrier-changelog
+
 
 .. ### Source: www.nordicsemi.com
 
@@ -217,7 +219,10 @@
 .. _`SUPL client download`: https://www.nordicsemi.com/Software-and-tools/Development-Kits/nRF9160-DK/Download#supl-c
 
 .. _`nRF9160 product website`: https://www.nordicsemi.com/Products/Low-power-cellular-IoT/nRF9160
+
+.. _`nRF9160 DK Downloads`:
 .. _`nRF9160 product website (compatible downloads)`: https://www.nordicsemi.com/Products/Low-power-cellular-IoT/nRF9160/Download#infotabs
+
 .. _`nRF9160 Certifications`: https://www.nordicsemi.com/Products/Low-power-Cellular-IoT/nRF9160-Certifications
 .. _`Energy efficiency`: https://www.nordicsemi.com/Products/Low-power-cellular-IoT/What-is-cellular-IoT#energy_efficiency
 
@@ -520,6 +525,7 @@
 .. _`Alexa.Gadget.StateListener interface`: https://developer.amazon.com/en-US/docs/alexa/alexa-gadgets-toolkit/alexa-gadget-statelistener-interface.html
 .. _`Alexa Gadgets Notifications interface`: https://developer.amazon.com/en-US/docs/alexa/alexa-gadgets-toolkit/notifications-interface.html
 .. _`Alexa Gadgets Pairing`: https://www.amazon.com/gp/help/customer/display.html?nodeId=GV66YEZ2245F4QYS
+.. _`Amazon Frustration-Free Setup (FFS)`: https://developer.amazon.com/docs/frustration-free-setup/matter-simple-setup-overview.html
 
 .. ### Source: openthread.io
 
@@ -656,6 +662,7 @@
 .. _`iBasis IoT network coverage`: https://ibasis.com/solutions/iot-connectivity/network-coverage/
 
 .. _`BME680`: https://www.bosch-sensortec.com/products/environmental-sensors/gas-sensors/bme680/
+.. _`Bosch BSEC`: https://www.bosch-sensortec.com/software-tools/software/bsec/
 
 .. _`ADXL362`: https://www.analog.com/en/products/adxl362.html#product-overview
 
