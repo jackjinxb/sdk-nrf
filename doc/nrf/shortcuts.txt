@@ -1,8 +1,8 @@
 .. |NCS| replace:: nRF Connect SDK
 
-.. |release| replace:: v1.9.0
-.. |release_tt| replace:: ``v1.9.0``
-.. |release_number_tt| replace:: ``1.9.0``
+.. |release| replace:: v1.9.1
+.. |release_tt| replace:: ``v1.9.1``
+.. |release_number_tt| replace:: ``1.9.1``
 
 .. |plusminus| unicode:: U+000B1 .. PLUS-MINUS SIGN
    :rtrim:
@@ -30,6 +30,17 @@
 
 .. |connect_terminal_both| replace:: Connect to both kits with a terminal emulator (for example, PuTTY).
    See :ref:`putty` for the required settings.
+
+.. |connect_terminal_ANSI| replace:: Connect to the kit with a terminal emulator that supports VT100/ANSI escape characters (for example, PuTTY).
+   See :ref:`putty` for the required settings.
+
+.. |connect_terminal_specific_ANSI| replace:: Connect to the kit that runs this sample with a terminal emulator that supports VT100/ANSI escape characters (for example, PuTTY).
+   See :ref:`putty` for the required settings.
+
+.. |connect_terminal_both_ANSI| replace:: Connect to both kits with a terminal emulator that supports VT100/ANSI escape characters (for example, PuTTY).
+   See :ref:`putty` for the required settings.
+
+.. |ANSI| replace:: that supports VT100/ANSI escape characters
 
 .. |nRF5340DKnoref| replace:: nRF5340 DK board (PCA10095)
 

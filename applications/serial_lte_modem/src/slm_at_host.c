@@ -34,7 +34,7 @@ LOG_MODULE_REGISTER(slm_at_host, CONFIG_SLM_LOG_LEVEL);
 
 #define UART_RX_BUF_NUM         2
 #define UART_RX_LEN             256
-#define UART_RX_TIMEOUT_MS      1
+#define UART_RX_TIMEOUT_US      2000
 #define UART_ERROR_DELAY_MS     500
 #define UART_RX_MARGIN_MS       10
 
@@ -79,7 +79,7 @@ uint16_t datamode_time_limit;                 /* Send trigger by time in data mo
 extern bool uart_configured;
 extern struct uart_config slm_uart;
 
-static int uart_send(const uint8_t *str, size_t len)
+static int uart_send(const uint8_t *buffer, size_t len)
 {
 	int ret;
 
@@ -92,8 +92,8 @@ static int uart_send(const uint8_t *str, size_t len)
 		return -ENOMEM;
 	}
 
-	memcpy(uart_tx_buf, str, len);
-	ret = uart_tx(uart_dev, uart_tx_buf, len, SYS_FOREVER_MS);
+	memcpy(uart_tx_buf, buffer, len);
+	ret = uart_tx(uart_dev, uart_tx_buf, len, SYS_FOREVER_US);
 	if (ret) {
 		LOG_WRN("uart_tx failed: %d", ret);
 		k_free(uart_tx_buf);
@@ -113,9 +113,9 @@ void rsp_send(const char *str, size_t len)
 	(void)uart_send(str, len);
 }
 
-void datamode_send(const uint8_t *data, size_t len)
+void data_send(const uint8_t *data, size_t len)
 {
-	LOG_HEXDUMP_DBG(data, MIN(len, HEXDUMP_DATAMODE_MAX), "TX-DATAMODE");
+	LOG_HEXDUMP_DBG(data, MIN(len, HEXDUMP_DATAMODE_MAX), "TX-DATA");
 	(void)uart_send(data, len);
 }
 
@@ -123,7 +123,7 @@ static int uart_receive(void)
 {
 	int ret;
 
-	ret = uart_rx_enable(uart_dev, uart_rx_buf[0], sizeof(uart_rx_buf[0]), UART_RX_TIMEOUT_MS);
+	ret = uart_rx_enable(uart_dev, uart_rx_buf[0], sizeof(uart_rx_buf[0]), UART_RX_TIMEOUT_US);
 	if (ret && ret != -EBUSY) {
 		LOG_ERR("UART RX failed: %d", ret);
 		rsp_send(FATAL_STR, sizeof(FATAL_STR) - 1);

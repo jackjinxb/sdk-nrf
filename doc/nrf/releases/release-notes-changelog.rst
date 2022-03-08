@@ -38,7 +38,15 @@ The following sections provide detailed lists of changes by component.
 Application development
 =======================
 
-|no_changes_yet_note|
+This section provides detailed lists of changes by :ref:`application <applications>`.
+
+nRF9160: Asset Tracker v2
+-------------------------
+
+ * Added:
+
+   * Support for :ref:`Bosch Software Environmental Cluster (BSEC) library <bosch_software_environmental_cluster_library>` driver .
+   * Support for indoor air quality (IAQ) readings retrieved from the BME680 sensor on Thingy:91. For more information, see the :ref:`asset_tracker_v2_sensor_module`.
 
 Protocols
 =========
@@ -57,6 +65,10 @@ Thread
 * Added:
 
   *  Support for the Link Metrics and CSL Thread v1.2 features for the nRF53 Series devices.
+
+* Removed:
+
+  *  Support for the :ref:`thread_architectures_designs_cp_ncp` architecture and the related tools.
 
 Applications
 ============
@@ -121,7 +133,7 @@ Thread samples
     * Added :file:`prj_thread_1_2.conf` to support Thread v1.2 build for the nRF52 and nRF53 Series devices.
     * Added child image configuration files for network core builds for Thread v1.2 build.
 
-nrf9160 Samples
+nrf9160 samples
 ---------------
 
 * Added:
@@ -130,12 +142,25 @@ nrf9160 Samples
 
 * Updated:
 
+   * :ref:`at_monitor_sample` sample:
+
+    * Added ``denied``, ``unknown``, ``roaming``, and ``UICC failure`` CEREG status codes to :c:func:`cereg_mon`.
+
   * :ref:`modem_shell_application` sample:
 
     * Added:
 
       * An option ``--interval`` (in seconds) to neighbor cell measurements in continuous mode  (``link ncellmeas --continuous``).
         When using this option, a new measurement is started in each interval.
+
+Gazell samples
+--------------
+
+* Updated:
+
+  * Separated the :ref:`gazell_samples` into their own pages for Host and Device.
+
+    There are now four different sample pages, where each Host sample must be used along with its corresponding Device sample.
 
 Drivers
 =======
@@ -197,6 +222,12 @@ Unity
 -----
 
 |no_changes_yet_note|
+
+Trusted Firmware-M
+==================
+
+* Fixed the NCSDK-13949 known issue where the TF-M Secure Image would copy FICR to RAM on nRF9160.
+* Fixed the NCSDK-12306 known issue where a usage fault would be triggered in the debug build on nRF9160.
 
 MCUboot
 =======
@@ -260,6 +291,7 @@ Documentation
 * Added:
 
   * Documentation for :ref:`degugging of nRF5340 <debugging>` in :ref:`working with nRF5340 DK<ug_nrf5340>` user guide.
+  * Section describing how to enable Amazon Frustration-Free Setup (FFS) support in :ref:`ug_matter_configuring_device_identification`.
 
 * Removed:
 
